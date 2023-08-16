@@ -5,25 +5,55 @@ date: "2023-08-15"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(ggrepel)
+library(EMMREML)
+library(reshape2)
+library(cobs)
+library(cowplot)
+library(stringr)
+library(viridis)
+
+#bioc packages:
+library(edgeR)
+library(qvalue)
+
+library(parallel)
+library(GGally)
+
+library(UpSetR)
+library(mashr)
+
+##cibersort
+library(e1071)
+library(preprocessCore)
+library(edgeR)
+library(gridExtra)
+
+
+
+
 ```
 
-## R Markdown
+```{r scripts and dirs}
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+workDir <- gitDir <- "~/Documents/giterdone/"
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+dataDir <- paste0(workDir,"data/")
+figDir <- paste0(workDir,"figures/")
+outDir <- paste0(workDir,"output/")
 
-```{r cars}
-summary(cars)
+dir.create(dataDir)
+dir.create(figDir)
+dir.create(outDir)
+
+source(paste0(gitDir,"meerkatPaper/rScripts/gatherData.R"))
+source(paste0(gitDir,"meerkatPaper/rScripts/generateResiduals.R"))
+source(paste0(gitDir,"meerkatPaper/rScripts/runEmmreml.R"))
+source(paste0(gitDir,"meerkatPaper/rScripts/runResponseEmreml.R"))
+source(paste0(gitDir,"meerkatPaper/rScripts/perm.fdr.R"))
+source(paste0(gitDir,"meerkatPaper/rScripts/compLMMBeta.R"))
+source(paste0(gitDir,"meerkatPaper/rScripts/gsea.R"))
+
+
 ```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
