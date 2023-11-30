@@ -22,3 +22,3575 @@ dir.create(dataDir)
 dir.create(figDir)
 dir.create(outDir)
 ```
+
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(qvalue)
+library(stringr)
+library(edgeR)
+library(EnvStats)
+library(ggbeeswarm)
+library(UpSetR)
+
+workDir <- "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/"
+dataDir <- paste0(workDir,"data/")
+figDir <- paste0(workDir,"figures/")
+outDir <- paste0(workDir,"output/")
+mashDir <- paste0(workDir,"mash/")
+
+figPaperDir <- paste0(figDir,"paper/")
+dir.create(figPaperDir)
+suppFigDir <- paste0(figDir,"paper/supp/")
+dir.create(suppFigDir)
+
+# COLORS #
+
+#dark=m, light=f
+#Ctrl
+ctrlM <- "grey40"
+ctrlF <- "grey70"
+ctrlF <- "grey20"
+ctrlF <- ""
+ctrlM <- "darkorchid4"
+ctrlM <- "#B5A9F4"
+ctrlF <- "#154376"
+ctrlM <- "#4B9CD3"
+
+#Gard
+gardF <- "#947322"
+gardM <- "#E0B13F"
+
+#LPS
+lpsF <- "#944F40"
+lpsM <- "#E06E55"
+
+#Dex
+dexM <- "#4BC4E0"
+dexF <- "#358394"
+
+
+highES <- "forestgreen"
+lowES <- "orange"
+
+
+#LRS
+lowLRS <- "deeppink"
+highLRS <- "darkorchid"
+highLRS <- "#779CD7"
+lowLRS <- "#E08FC6"
+
+
+#hallmark
+gene.set <- read.table(paste0(dataDir,"hallmarkPathways_wCategories.csv"), sep = ",")
+colnames(gene.set) <- c("Associated.Gene.Name","GO.Term.Accession","Category")
+
+```
+
+Figure 1
+```{r 1.A}
+allMetaF <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_metadata.RDS")
+allMetaM <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_allTrt_10000genes_5lCPM_metadata.RDS")
+
+#capture only
+allMetaF <- unique(allMetaF[colnames(allMetaF) %in% c("group","captureref","sex","status_dom_sub",
+                                                      "ageAtSample","evidenceofTB.","draw_time","bloodVolmL",
+                                                      "sampleDate","sampleYear","sampleMonth","rationale","transitionID",
+                                                      "correctsampleID","birthdate","collectionRationale","climSeason")])
+allMetaF$sMonthDec <- round(as.numeric(format(as.Date(allMetaF$sampleDate, format="%Y-%m-%d"),"%m")) +
+                              as.numeric(format(as.Date(allMetaF$sampleDate, format="%Y-%m-%d"),"%d")) / 31, digits = 2)
+
+allMetaM <- unique(allMetaM[colnames(allMetaM) %in% c("group","captureref","sex","status_dom_sub",
+                                                      "ageAtSample","evidenceofTB.","draw_time","bloodVolmL",
+                                                      "sampleDate","sampleYear","sampleMonth","rationale","transitionID",
+                                                      "correctsampleID","birthdate","collectionRationale","climSeason")])
+allMetaM$sMonthDec <- round(as.numeric(format(as.Date(allMetaM$sampleDate, format="%Y-%m-%d"),"%m")) +
+                              as.numeric(format(as.Date(allMetaM$sampleDate, format="%Y-%m-%d"),"%d")) / 31, digits = 2)
+
+
+allMeta <- rbind.data.frame(allMetaF,allMetaM)
+
+
+ggplot(allMetaF, aes(x = sMonthDec)) +
+  geom_density(fill = ctrlF) +
+  theme_minimal() + theme_bw() +
+  theme(axis.text.y = element_text(size = 25))
+ggsave(paste0(figPaperDir,"1a_densityF.png"), width = 8, height = 4)
+
+ggplot(allMetaM, aes(x = sMonthDec)) +
+  geom_density(fill = ctrlM) +
+  theme_minimal() + theme_bw() +
+  theme(axis.text.y = element_text(size = 25))
+ggsave(paste0(figPaperDir,"1a_densityM.png"), width = 8, height = 4)
+
+ggplot(allMetaF, aes(x = sMonthDec)) +
+  geom_histogram(fill = ctrlF, bins = 12) +
+  theme_minimal() + theme_bw() +
+  theme(axis.text.y = element_text(size = 25)) +
+  ylim(c(0,25))
+ggsave(paste0(figPaperDir,"1a_histF.png"), width = 8, height = 4)
+
+ggplot(allMetaM, aes(x = sMonthDec)) +
+  geom_histogram(fill = ctrlM, bins = 12) +
+  theme_minimal() + theme_bw() +
+  theme(axis.text.y = element_text(size = 25)) +
+  ylim(c(0,25))
+ggsave(paste0(figPaperDir,"1a_histM.png"), width = 8, height = 4)
+
+```
+```{r 1.B longitudinal}
+allMetaF <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_metadata.RDS")
+allMetaM <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_allTrt_10000genes_5lCPM_metadata.RDS")
+
+#capture only
+allMetaF <- unique(allMetaF[colnames(allMetaF) %in% c("group","captureref","sex","status_dom_sub",
+                                                      "ageAtSample","evidenceofTB.","draw_time","bloodVolmL",
+                                                      "sampleDate","sampleYear","sampleMonth","rationale","transitionID",
+                                                      "correctsampleID","birthdate","collectionRationale","climSeason")])
+allMetaF$sMonthDec <- round(as.numeric(format(as.Date(allMetaF$sampleDate, format="%Y-%m-%d"),"%m")) +
+                              as.numeric(format(as.Date(allMetaF$sampleDate, format="%Y-%m-%d"),"%d")) / 31, digits = 2)
+
+allMetaM <- unique(allMetaM[colnames(allMetaM) %in% c("group","captureref","sex","status_dom_sub",
+                                                      "ageAtSample","evidenceofTB.","draw_time","bloodVolmL",
+                                                      "sampleDate","sampleYear","sampleMonth","rationale","transitionID",
+                                                      "correctsampleID","birthdate","collectionRationale","climSeason")])
+allMetaM$sMonthDec <- round(as.numeric(format(as.Date(allMetaM$sampleDate, format="%Y-%m-%d"),"%m")) +
+                              as.numeric(format(as.Date(allMetaM$sampleDate, format="%Y-%m-%d"),"%d")) / 31, digits = 2)
+
+
+allMeta <- rbind.data.frame(allMetaF,allMetaM)
+
+caughtMulti <- names(table(allMeta$correctsampleID)[which(table(allMeta$correctsampleID) > 1)])
+
+caughtMultiStatus <- vector()
+
+for (s in caughtMulti) {
+  statuses <- unique(subset(allMeta, correctsampleID == s)$status_dom_sub)
+  if (length(statuses) > 1) {
+    caughtMultiStatus <- c(caughtMultiStatus,s)
+  }
+}
+
+caughtMultiStatus <- caughtMultiStatus[which(caughtMultiStatus != "VVHF129")]
+
+multiMeta <- subset(allMeta, correctsampleID %in% caughtMultiStatus)
+
+### sort by sex
+factorOrder <- unique(multiMeta$correctsampleID[order(multiMeta$sex)])
+multiMeta$correctsampleID <- factor(multiMeta$correctsampleID, levels = factorOrder)
+
+
+ggplot(data = multiMeta,
+       aes(x = sampleDate,
+           y = correctsampleID,
+           group = correctsampleID,
+           col = sex,
+           shape = status_dom_sub)) +
+  geom_point() +
+  geom_line()
+
+
+### sort by earliest capture
+factorOrder <- unique(multiMeta$correctsampleID[order(multiMeta$sampleDate)])
+multiMeta$correctsampleID <- factor(multiMeta$correctsampleID, levels = factorOrder)
+
+
+ggplot(data = multiMeta,
+       aes(x = sampleDate,
+           y = correctsampleID,
+           group = correctsampleID,
+           col = sex,
+           shape = status_dom_sub)) +
+  geom_point(size = 4) +
+  geom_line(lwd = 1) +
+  theme_minimal() + theme_bw() +
+  theme(axis.text.y = element_text(size = 14),
+        axis.title = element_text(color = "black"),
+        axis.text = element_text(color = "black"),
+        legend.position = "none") +
+  scale_shape_manual(values = c(16, 1)) +
+  scale_color_manual(values = c(ctrlF, ctrlM))
+ggsave(paste0(figPaperDir,"1B_LongitudinalSampling_black.png"), width = 12, height = 4)
+```
+
+
+```{r 1.B}
+#pca of responses, LPS/Gard/Dex
+
+pointSize <- 3
+plotAlpha <- 1
+labelSize <- 20
+numSize <- 16
+
+pcaLPS <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_MF_LPS_10000genes_5lCPM_modelF_dfMeta.RDS")
+
+pcaLPS$TrtSex <- paste0(pcaLPS$Trt,"_",pcaLPS$sex)
+
+ggplot(data = pcaLPS,
+       aes(x = PC1,
+           y = PC2,
+           col = TrtSex)) +
+  geom_point(size = pointSize, alpha = plotAlpha) +
+  theme_minimal() + theme_bw() +
+  theme(axis.text = element_text(size = numSize, color = "black"),
+        axis.title = element_text(size = labelSize, color = "black"),
+        panel.grid = element_blank(),
+        legend.position = "none") +
+  scale_color_manual(values = c(ctrlF,ctrlM,lpsF,lpsM))
+ggsave(paste0(figPaperDir,"1b_LPS.png"), width = 4, height = 4)
+
+
+pcaGard <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_MF_Gard_10000genes_5lCPM_modelG_dfMeta.RDS")
+
+pcaGard$TrtSex <- paste0(pcaGard$Trt,"_",pcaGard$sex)
+
+ggplot(data = pcaGard,
+       aes(x = PC1,
+           y = PC2,
+           col = TrtSex)) +
+  geom_point(size = pointSize, alpha = plotAlpha) +
+  theme_minimal() + theme_bw() +
+    theme(axis.text = element_text(size = numSize, color = "black"),
+        axis.title = element_text(size = labelSize, color = "black"),
+        panel.grid = element_blank(),
+        legend.position = "none") +
+  scale_color_manual(values = c(ctrlF,ctrlM,gardF,gardM))
+ggsave(paste0(figPaperDir,"1b_Gard.png"), width = 4, height = 4)
+
+
+pcaDex <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_MF_Dex_10000genes_5lCPM_modelG_dfMeta.RDS")
+
+pcaDex$TrtSex <- paste0(pcaDex$Trt,"_",pcaDex$sex)
+
+ggplot(data = pcaDex,
+       aes(x = PC1,
+           y = PC2,
+           col = TrtSex)) +
+  geom_point(size = pointSize, alpha = plotAlpha) +
+  theme_minimal() + theme_bw() +
+  theme(axis.text = element_text(size = numSize, color = "black"),
+        axis.title = element_text(size = labelSize, color = "black"),
+        panel.grid = element_blank(),
+        legend.position = "none") +
+  scale_color_manual(values = c(ctrlF,ctrlM,dexF,dexM))
+
+ggsave(paste0(figPaperDir,"1b_Dex.png"), width = 4, height = 4)
+#print R correlations
+
+```
+
+```{r Methods Text}
+allMeta <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_MF_allTrt_10000genes_5lCPM_metadata.RDS")
+
+totalWeights <- unique(allMeta[,colnames(allMeta) %in% c("captureref","totalWeights")])
+
+paste0("We measured meerkat body mass multiple times daily, with the samples in this analysis averaging of ",
+       round(mean(totalWeights$totalWeights), digits = 1),
+       " weighings in the 60 days surrounding the date of sampling")
+
+ages <- unique(allMeta[,colnames(allMeta) %in% c("captureref","ageAtSample")])
+paste0("The average age at the date of sampling was ",
+       round(mean(ages$ageAtSample), digits = 1),
+       " years (sd=",round(sd(ages$ageAtSample), digits = 2),
+       " years; ages ",min(ages$ageAtSample),
+       "-",max(ages$ageAtSample),
+       ")")
+
+massLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_weight")
+
+print(paste0("Body mass exhibited a modest correlation with gene expression in the LPS-stimulated condition (",sum(massLPS$fdr_weight < .1),
+             " body mass-associated genes; FDR < 10%)-"))
+
+cor.test(massLPS$beta_weight, massLPS$beta_status)$estimate
+cor.test(massLPS$beta_weight, massLPS$beta_status)$p.value
+print(paste0("but this signature was substantially weaker than that of dominance status itself (rmass-status = ",
+             cor.test(massLPS$beta_weight, massLPS$beta_status)$estimate,", p=",
+             cor.test(massLPS$beta_weight, massLPS$beta_status)$p.value,")"))
+
+ggplot(data = massLPS,
+       aes(x = beta_status,
+           y = beta_weight)) +
+  geom_point()
+
+massweightCor <- cor.test(massLPS$beta_weight, massLPS$beta_status)
+
+
+print(paste0("(rage-status = ",cor.test(massLPS$beta_age, massLPS$beta_status)$estimate,", p=",
+             cor.test(massLPS$beta_age, massLPS$beta_status)$p.value,", rpregnancy-status = ",
+             cor.test(massLPS$beta_preg, massLPS$beta_status)$estimate,", p=",
+             cor.test(massLPS$beta_preg, massLPS$beta_status)$p.value,""))
+
+
+massAllTrt <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_modelG_allTrtF+Preg+WeightwKmatrix_emmreml")
+
+print(paste0("(rage-status = ",cor.test(massAllTrt$beta_age, massAllTrt$beta_status)$estimate,", p=",
+             cor.test(massAllTrt$beta_age, massAllTrt$beta_status)$p.value,", rpregnancy-status = ",
+             cor.test(massAllTrt$beta_preg, massAllTrt$beta_status)$estimate,", p=",
+             cor.test(massAllTrt$beta_preg, massAllTrt$beta_status)$p.value,""))
+```
+
+
+```{r 1.C}
+### 1C
+#count of significant genes, male and female by treatment | using qvalue as a dummy
+maleLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_LPS_10000genes_5lCPM_modelF_basic+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+#maleLPS$qval_treatment <- qvalue(maleLPS$pval_treatment)$qvalue
+
+femaleLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+#femaleLPS$qval_treatment <- qvalue(femaleLPS$pval_treatment)$qvalue
+
+
+maleGard <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_Gard_10000genes_5lCPM_modelG_basic+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+#maleGard$qval_treatment <- qvalue(maleGard$pval_treatment)$qvalue
+
+femaleGard <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gard_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+#femaleGard$qval_treatment <- qvalue(femaleGard$pval_treatment)$qvalue
+
+
+maleDex <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_Dex_10000genes_5lCPM_modelG_basic+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+#maleDex$qval_treatment <- qvalue(maleDex$pval_treatment)$qvalue
+
+femaleDex <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Dex_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+#femaleDex$qval_treatment <- qvalue(femaleDex$pval_treatment)$qvalue
+
+
+fdrThresh <- 0.10
+
+trtSigGeneVector <- c(rep("mLPS",sum(maleLPS$fdr_treatment < fdrThresh)),
+                      rep("fLPS",sum(femaleLPS$fdr_treatment < fdrThresh)),
+                      rep("mGard",sum(maleGard$fdr_treatment < fdrThresh)),
+                      rep("fGard",sum(femaleGard$fdr_treatment < fdrThresh)),
+                      rep("mDex",sum(maleDex$fdr_treatment < fdrThresh)),
+                      rep("fDex",sum(femaleDex$fdr_treatment < fdrThresh)))
+
+trtSigGeneDF <- as.data.frame(trtSigGeneVector)
+
+trtSigGeneDF$trtSigGeneVector <- factor(trtSigGeneDF$trtSigGeneVector, levels = c("mDex","fDex","mGard","fGard","mLPS","fLPS"))
+
+ggplot() +
+  geom_bar(dat = trtSigGeneDF,
+       aes(x = trtSigGeneVector,
+           fill = trtSigGeneVector), width = .35) +
+  geom_point(aes(x = names(table(trtSigGeneVector)),
+                 y = table(trtSigGeneVector),
+                 col = names(table(trtSigGeneVector))), size = 4.5) +
+  theme_minimal() + theme_bw() +
+  theme(axis.text.y = element_text(size = 14),
+        panel.grid = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  scale_fill_manual(values = c(dexM,dexF,gardM,gardF,lpsM,lpsF)) +
+  scale_color_manual(values = c(dexF,gardF,lpsF,dexM,gardM,lpsM)) +
+  theme(legend.position = "none")
+
+ggsave(paste0(figPaperDir,"1c_barplot.png"), width = 2.5, height = 8)
+```
+
+
+```{r 1.D}
+### 1D
+#enrichment scores of treatment across male and females
+gseaF <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/gsea_trtstatuspreg_GSEA_allResults.txt", 
+                    sep = ",", header = TRUE)
+colnames(gseaF)[1] <- "pathway"
+colnames(gseaF)[4] <- "ESup"
+colnames(gseaF)[5] <- "ESdown"
+
+#add category
+gseaF$cat <- ""
+
+for (row in 1:dim(gseaF)[1]) {
+  pathCat <- subset(gene.set, GO.Term.Accession == gseaF$pathway[row])$Category[1]
+  gseaF$cat[row] <- pathCat 
+}
+
+gseaF$sigES <- ifelse(gseaF$pval_upreg < gseaF$pval_downreg, gseaF$ESup, gseaF$ESdown)
+gseaF$sigPval <- ifelse(gseaF$pval_upreg < gseaF$pval_downreg, gseaF$pval_upreg, gseaF$pval_downreg)
+
+gseaF$biggerES <- ifelse(abs(gseaF$ESup) > abs(gseaF$ESdown), gseaF$ESup, gseaF$ESdown)
+
+trtGSEA <- subset(gseaF, c == "treatment")
+#trtGSEA <- subset(gseaF, c == "status")
+
+immunePaths <- unique(subset(gseaF, cat == "immune")$pathway)
+immunePaths <- immunePaths[-which(immunePaths == "HALLMARK_INFLAMMASOME")]
+immunePaths <- c(immunePaths,"HALLMARK_TNFA_SIGNALING_VIA_NFKB")
+
+trtGSEAimmune <- subset(trtGSEA, pathway %in% immunePaths)
+
+trtGSEAimmune$pathway <- str_remove_all(string = trtGSEAimmune$pathway, pattern = "HALLMARK_")
+trtGSEAimmune$pathway <- str_replace_all(string = trtGSEAimmune$pathway, pattern = "_", replacement = "\n")
+
+
+ggplot(data = trtGSEAimmune,
+       aes(x = pathway,
+           y = trt,
+           fill = biggerES)) +
+  geom_tile() +
+  geom_text(aes(label = round(biggerES, digits = 2))) +
+  theme_minimal() + theme_bw() +
+  scale_fill_gradientn(limits = c(-1,1),
+                        colors = c(lowES,"white",highES))
+
+ggsave(paste0(figPaperDir,"1d_trtGSEAES_female.png"), width = 8, height = 6)
+
+
+#pval < .05 only
+trtGSEAimmune <- trtGSEAimmune[trtGSEAimmune$pval_upreg < .05 | trtGSEAimmune$pval_downreg < .05,]
+
+trtGSEAimmune$pathway <- ifelse(trtGSEAimmune$pathway == "IL6\nJAK\nSTAT3\nSIGNALING", "IL6 JAK STAT3\nSIGNALING", trtGSEAimmune$pathway)
+trtGSEAimmune$pathway <- ifelse(trtGSEAimmune$pathway == "TNFA\nSIGNALING\nVIA\nNFKB", "TNFA\nSIGNALING VIA\nNFKB", trtGSEAimmune$pathway)
+
+
+ggplot(data = trtGSEAimmune,
+       aes(x = pathway,
+           y = trt)) +
+  geom_point(aes(col = biggerES, size = -log10(trtGSEAimmune$sigPval + 0.0001))) +
+  #geom_text(aes(label = round(biggerES, digits = 2)), size = .8, col = "gray20") +
+  theme_minimal() + theme_bw() +
+  labs(size = "Pval") +
+  scale_color_gradientn(limits = c(-1,1),
+                        colors = c(lowES,"grey80",highES)) +
+  theme(axis.text.y = element_text(size = 8, color = "black"),
+        axis.text.x = element_text(size = 6, angle = 90, vjust = 0.5, color = "black"),
+        axis.title = element_blank(),
+        legend.position = "none")
+ ggsave(paste0(figPaperDir,"1dv2_trtGSEAES_female.png"), width = 4.5, height = 2.5)
+
+  
+ggplot(data = trtGSEAimmune,
+       aes(x = pathway,
+           y = trt)) +
+  geom_point(aes(size = -log10(trtGSEAimmune$sigPval + 0.0001))) +
+  #geom_text(aes(label = round(biggerES, digits = 2)), size = .8, col = "gray20") +
+  theme_minimal() + theme_bw() +
+  labs(size = "Pval") +
+  scale_color_gradientn(limits = c(-1,1),
+                        colors = c(lowES,"grey80",highES)) +
+  theme(axis.text.y = element_text(size = 8, color = "black"),
+        axis.text.x = element_text(size = 6, angle = 90, vjust = 0.5, color = "black"),
+        axis.title = element_blank())
+ ggsave(paste0(figPaperDir,"1dv2_trtGSEAES_female_legend.png"), width = 4.5, height = 2.5)
+```
+
+
+```{r 1.E}
+### 1E
+# mean GE (resids) of genes in Inflammatory pathways, Ctrl v. Trt boxplot
+
+
+for (hallPathName in c("HALLMARK_INFLAMMATORY_RESPONSE",
+                       "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+                       "HALLMARK_INTERFERON_ALPHA_RESPONSE",
+                       "HALLMARK_INTERFERON_GAMMA_RESPONSE")) {
+  pathGeneList <- unique(subset(gene.set, GO.Term.Accession == hallPathName)$Associated.Gene.Name)
+  
+  for (sex in c("M","F","MF")) {
+    if (sex == "M") {
+      boxLines <- "gray80"
+    } else {
+      boxLines <- "gray10"
+    }
+    
+    #trt<-"LPS"
+    for (trt in c("LPS","Dex","Gard")) {
+      
+      modelName <- "G"
+      if (trt == "LPS") {
+        modelName <- "F"
+      }
+      
+      residsF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",trt,"_10000genes_5lCPM_model",modelName,"_resids.RDS"))
+      residsPathF <- residsF[rownames(residsF) %in% pathGeneList,]
+        
+      metadataF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",trt,"_10000genes_5lCPM_metadata.RDS"))
+      
+      colnames(residsPathF) == metadataF$sampleID
+      
+      metadataF$pathMedian <- apply(residsPathF,2,median)
+      
+      if (trt == "LPS") {
+        if (sex == "M") {
+          trtColor <- lpsM
+          ctrlColor <- ctrlM
+        } else {
+          trtColor <- lpsF
+          ctrlColor <- ctrlF
+        }
+      } else if (trt == "Gard") {
+        if (sex == "M") {
+          trtColor <- gardM
+          ctrlColor <- ctrlM
+        } else {
+          trtColor <- gardF
+          ctrlColor <- ctrlF
+        }
+      } else {
+        if (sex == "M") {
+          trtColor <- dexM
+          ctrlColor <- ctrlM
+        } else {
+          trtColor <- dexF
+          ctrlColor <- ctrlF
+        }
+      }
+      
+      ggplot(data = metadataF,
+             aes(x = Trt,
+                 y = pathMedian,
+                 fill = Trt)) +
+        geom_boxplot(col = boxLines) +
+        geom_hline(yintercept = 0, col = "gray30") +
+        theme_minimal() + theme_bw() +
+        #ylim(c(-2.75,2.75)) +
+        ylab(paste0("Median GE ",hallPathName)) +
+        scale_fill_manual(values = c(ctrlColor,trtColor))
+      
+      ggsave(paste0(figPaperDir,"1e_medPathwayGE_",sex,"_",hallPathName,"_",trt,".png"), width = 6, height = 6)
+    }
+  }
+}
+
+
+```
+
+Figure 2
+```{r}
+#2.A
+# plot of significant genes in M and F
+
+#count of significant genes, male and female by treatment | using qvalue as a dummy
+femaleLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+#femaleLPS$qval_treatment <- qvalue(femaleLPS$pval_treatment)$qvalue
+
+femaleGard <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gardonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+#femaleGard$qval_treatment <- qvalue(femaleGard$pval_treatment)$qvalue
+
+femaleDex <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Dexonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+#femaleDex$qval_treatment <- qvalue(femaleDex$pval_treatment)$qvalue
+
+femaleCtrl <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+#femaleDex$qval_treatment <- qvalue(femaleDex$pval_treatment)$qvalue
+
+femaleAll <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_modelG_allTrtF+Preg+WeightwKmatrix_emmreml")
+#femaleDex$qval_treatment <- qvalue(femaleDex$pval_treatment)$qvalue
+
+
+fdrThresh <- 0.10
+
+trtSigGeneVector <- c(rep("mLPS",1),
+                      rep("fLPS",sum(femaleLPS$fdr_status < fdrThresh)),
+                      rep("mGard",1),
+                      rep("fGard",sum(femaleGard$fdr_status < fdrThresh)),
+                      rep("mDex",1),
+                      rep("fDex",1),
+                      rep("mCtrl",1),
+                      rep("fCtrl",sum(femaleCtrl$fdr_status < fdrThresh)),
+                      rep("mAll",1),
+                      rep("fAll",sum(qvalue(femaleAll$pval_status)$qvalue < fdrThresh)))
+
+trtSigGeneDF <- as.data.frame(trtSigGeneVector)
+
+trtSigGeneDF$trtSigGeneVector <- factor(trtSigGeneDF$trtSigGeneVector, levels = c("fAll","mAll",
+                                                                                  "fCtrl","mCtrl",
+                                                                                  "fLPS","mLPS",
+                                                                                  "fGard","mGard",
+                                                                                  "fDex","mDex"))
+
+length(unique(c(rownames(femaleLPS)[femaleLPS$fdr_status < fdrThresh],
+         rownames(femaleCtrl)[femaleCtrl$fdr_status < fdrThresh],
+         rownames(femaleGard)[femaleGard$fdr_status < fdrThresh])))
+
+
+ggplot() +
+  geom_bar(dat = trtSigGeneDF,
+       aes(x = trtSigGeneVector,
+           fill = trtSigGeneVector), width = 1/3) +
+  geom_point(aes(x = "fAll",
+                 y = sum(trtSigGeneDF$trtSigGeneVector == "fAll")), col = ctrlF, size = 12) +
+  geom_point(aes(x = "fCtrl",
+                 y = sum(trtSigGeneDF$trtSigGeneVector == "fCtrl")), col = ctrlF, size = 12) +
+  geom_point(aes(x = "fLPS",
+                 y = sum(trtSigGeneDF$trtSigGeneVector == "fLPS")), col = lpsF, size = 12) +
+    geom_point(aes(x = "fGard",
+                 y = sum(trtSigGeneDF$trtSigGeneVector == "fGard")), col = gardF, size = 10) +
+  theme_minimal() + theme_bw() +
+  scale_y_log10() +
+  theme(axis.title = element_blank(),
+        axis.text.y = element_text(size = 20),
+        axis.text.x = element_text(size = 10)) +
+  scale_fill_manual(values = c(ctrlF,ctrlM,ctrlF,ctrlM,lpsF,lpsM,gardF,gardM,dexF,dexM)) +
+  #scale_color_manual(values = c(dexF,gardF,lpsF,dexM,gardM,lpsM)) +
+  theme(legend.position = "none")
+
+ggsave(paste0(figPaperDir,"2a_barplot.png"), width = 6, height = 3)
+
+
+#data for venn diagram
+
+lpsGenes <- rownames(femaleLPS)[femaleLPS$fdr_status < fdrThresh]
+gardGenes <- rownames(femaleGard)[femaleGard$fdr_status < fdrThresh]
+ctrlGenes <- rownames(femaleCtrl)[femaleCtrl$fdr_status < fdrThresh]
+allGenes <- rownames(femaleAll)[qvalue(femaleAll$pval_status)$qvalue < fdrThresh]
+
+(sqrt(length(lpsGenes))/pi) * 30
+(sqrt(length(gardGenes))/pi) * 30
+(sqrt(length(ctrlGenes))/pi) * 30
+(sqrt(length(allGenes))/pi) * 30
+
+
+#use an upset plot
+###upset plot
+listInput <- list(lpsGenes,
+                  gardGenes,
+                  ctrlGenes,
+                  allGenes)
+
+names(listInput) <- c("LPS",
+                      "Gard",
+                      "Ctrl",
+                      "AllTrt")
+
+testList <- fromList(listInput)
+
+png(paste0(figPaperDir,"2a_upsetPlot_Status_fdr",fdrThresh,"_forVennDiagram.png"), width = 800, height = 800)
+upset(data = testList, order.by = "freq", nsets = length(names(listInput)), nintersects = 20, text.scale = 2.5)
+dev.off()
+
+### plot variables
+pointSize <- .75
+axisSize <- .25
+labelSize <- 20
+numberSize <- 14
+
+### gene list
+allSigGenes <- unique(c(lpsGenes,gardGenes,ctrlGenes,allGenes))
+
+
+## x-y plots
+femaleAll$gene <- rownames(femaleAll)
+femaleAll$stdBeta_status <- femaleAll$beta_status / sqrt(femaleAll$var_beta_status)
+
+#ctrl - all
+femaleCtrl$gene <- rownames(femaleCtrl)
+femaleCtrl$stdBeta_status <- femaleCtrl$beta_status / sqrt(femaleCtrl$var_beta_status)
+fAllCtrl <- merge(femaleAll,femaleCtrl, by = "gene", suffixes = c(".all",".ctrl"))
+
+#fAllCtrlPlot <- fAllCtrl[fAllCtrl$fdr_status < fdrThresh | qvalue(fAllCtrl$pval_status.all)$qvalue < fdrThresh,]
+fAllCtrlPlot <- fAllCtrl[fAllCtrl$gene %in% allSigGenes,]
+
+#Gard
+gardF <- "#E0B13F"
+
+#LPS
+lpsF <- "#E06E55"
+
+#Dex
+dexF <- "#4BC4E0"
+
+
+
+
+ggplot(data = fAllCtrlPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.ctrl)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="Ctrl Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  geom_point(size = pointSize, col = "gray15")
+ggsave(paste0(figPaperDir,"3a_CtrlVallTrt_sigBetaPlot.png"), width = 4, height = 4)
+
+
+#gard - all
+femaleGard$gene <- rownames(femaleGard)
+femaleGard$stdBeta_status <- femaleGard$beta_status / sqrt(femaleGard$var_beta_status)
+fAllGard <- merge(femaleAll,femaleGard, by = "gene", suffixes = c(".all",".gard"))
+
+#fAllGardPlot <- fAllGard[fAllGard$fdr_status < fdrThresh | qvalue(fAllGard$pval_status.all)$qvalue < fdrThresh,]
+fAllGardPlot <- fAllGard[fAllGard$gene %in% allSigGenes,]
+
+ggplot(data = fAllGardPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.gard)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="Gard Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  geom_point(size = pointSize, col = gardF)
+ggsave(paste0(figPaperDir,"3a_GardVallTrt_sigBetaPlot.png"), width = 4, height = 4)
+
+ggplot(data = fAllGardPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.gard)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="Gard Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5), position = "right") +
+  geom_point(size = pointSize, col = gardF)
+ggsave(paste0(figPaperDir,"3a_GardVallTrt_sigBetaPlot__RIGHT.png"), width = 4, height = 4)
+
+
+#lps - all
+#geneHighlight <- c("EDN1","SEMA4D","CD74","COMMD1","COMMD5","AKT1")
+geneHighlight <- c("EDN1","COMMD1","COMMD5","AKT1")
+
+femaleLPS$gene <- rownames(femaleLPS)
+femaleLPS$stdBeta_status <- femaleLPS$beta_status / sqrt(femaleLPS$var_beta_status)
+fAllLPS <- merge(femaleAll,femaleLPS, by = "gene", suffixes = c(".all",".lps"))
+
+#fAllLPSPlot <- fAllLPS[fAllLPS$fdr_status < fdrThresh | qvalue(fAllLPS$pval_status.all)$qvalue < fdrThresh,]
+fAllLPSPlot <- fAllLPS[fAllLPS$gene %in% allSigGenes,]
+
+fAllLPSPlot$geneHighlight <- fAllLPSPlot$gene %in% geneHighlight
+
+fAllLPSPlot <- fAllLPSPlot[order(fAllLPSPlot$geneHighlight),]
+
+ggplot(data = fAllLPSPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.lps,
+           col= geneHighlight)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="LPS Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  geom_point(size = pointSize) +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c(lpsF,"gray15"))
+ggsave(paste0(figPaperDir,"3a_lpsVallTrt_sigBetaPlot.png"), width = 4, height = 4)
+
+
+#dex - all
+femaleDex$gene <- rownames(femaleDex)
+femaleDex$stdBeta_status <- femaleDex$beta_status / sqrt(femaleDex$var_beta_status)
+fAllDex <- merge(femaleAll,femaleDex, by = "gene", suffixes = c(".all",".dex"))
+
+#fAllDexPlot <- fAllDex[fAllDex$fdr_status < fdrThresh | qvalue(fAllDex$pval_status.all)$qvalue < fdrThresh,]
+fAllDexPlot <- fAllDex[fAllDex$gene %in% allSigGenes,]
+
+ggplot(data = fAllDexPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.dex)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="Dex Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  geom_point(size = pointSize, col = dexF)
+ggsave(paste0(figPaperDir,"3a_DexVallTrt_sigBetaPlot.png"), width = 4, height = 4)
+
+ggplot(data = fAllDexPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.dex)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="Dex Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5), position = "right") +
+  geom_point(size = pointSize, col = dexF)
+ggsave(paste0(figPaperDir,"3a_DexVallTrt_sigBetaPlot__RIGHT.png"), width = 4, height = 4)
+
+
+```
+
+```{r 3b single gene broken down by status and treatment}
+
+ctrlM <- "grey40"
+ctrlF <- "grey70"
+
+
+geneList <- c("EDN1","IL16","CD74","IL6R","SEMA4D","GNG2","AKT1","COMMD1","COMMD5")
+
+geneName <- "EDN1"
+
+for (geneName in geneList) {
+  pathGeneList <- geneName
+  
+  sex <- "F"
+  trt <- "LPS"
+  modelName <- "F"
+  
+  residsF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",
+                            trt,"_10000genes_5lCPM_model",modelName,"_resids.RDS"))
+  
+  residsPathF <- residsF[rownames(residsF) %in% pathGeneList,]
+  
+  metadataF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",
+                              trt,"_10000genes_5lCPM_metadata.RDS"))
+  
+  emremlF <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",trt,
+                            "_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_treatment"))
+  emremlF$qval_status <- qvalue(emremlF$pval_status)$qvalue
+  
+  subset(emremlF, qval_status < .05 & fdr_treatment < .01)
+  
+  colnames(residsPathF) == metadataF$sampleID
+      
+  metadataF$pathMedian <- residsPathF
+  metadataF$status_dom_sub <- factor(metadataF$status_dom_sub, levels = c("S","D"))
+  
+  metadataF$statTrt <- paste0(metadataF$status_dom_sub," ",metadataF$Trt)
+  metadataF$statTrt <- factor(metadataF$statTrt, levels = c("S Ctrl","D Ctrl","S LPS","D LPS"))
+  
+  
+  ### generate a list of paired Ctrl/LPS
+  captPairs <- names(table(metadataF$captureref)[table(metadataF$captureref) > 1])
+  metadataPairs <- subset(metadataF, captureref %in% captPairs)
+  
+  metadataPairs <- metadataPairs[order(metadataPairs$Trt),]
+  metadataPairs <- metadataPairs[order(metadataPairs$captureref),]
+  
+  
+  ggplot() +
+    geom_boxplot(data = metadataF,
+             aes(x = Trt,
+                 y = pathMedian,
+                 fill = statTrt)) +
+    geom_hline(yintercept = 0) +
+    scale_fill_manual(values = c(ctrlF,ctrlM,lpsM,lpsF)) +
+        theme_minimal() + theme_bw() +
+    theme(legend.position = "none") +
+          theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = 24, color = "black"),
+        axis.text = element_text(size = 24, color = "black"),
+        axis.text.x = element_text(margin = margin(t = 30))) +
+        #ylab(paste0(geneName," - Gene Expression")) +
+    ggtitle(geneName) +
+    xlab("") + ylab("Gene Expression")
+  ggsave(paste0(figPaperDir,"3b_",sex,"_",geneName,"_",trt,".png"), width = 3, height = 6)
+  
+  ### gene expression response
+  # "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_modelF_responseResids.RDS"
+  respResidsF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,
+                                "_",trt,"_10000genes_5lCPM_model",modelName,"_responseResids.RDS"))
+  
+  residsPathF <- respResidsF[rownames(respResidsF) %in% pathGeneList,]
+  
+  metadataF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",
+                              trt,"_10000genes_5lCPM_responseMetadata.RDS"))
+  
+  colnames(residsPathF) == metadataF$sampleID
+      
+  metadataF$pathMedian <- residsPathF
+  metadataF$status_dom_sub <- factor(metadataF$status_dom_sub, levels = c("S","D"))
+  
+  ggplot(data = metadataF,
+             aes(x = status_dom_sub,
+                 y = pathMedian,
+                 fill = status_dom_sub)) +
+    geom_hline(yintercept = 0) +
+    geom_boxplot() +
+    geom_jitter(height = 0, width = .05) +
+    scale_fill_manual(values = c(lpsM,lpsF)) +
+        theme_minimal() + theme_bw() +
+    theme(legend.position = "none") +
+        #ylab(paste0(geneName," - LogFC ",trt," Response")) +
+      theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = 24, color = "black"),
+        axis.text = element_text(size = 24, color = "black")) +
+    ggtitle(geneName) +
+    xlab("") + ylab("LPS Response")
+  ggsave(paste0(figPaperDir,"3b_",sex,"_",geneName,"_",trt,"_LogFCResponse.png"), width = 2, height = 6)
+
+  
+  
+  
+}
+
+
+```
+
+```{r 3c}
+geneList <- c( "HALLMARK_INTERFERON_ALPHA_RESPONSE",
+               "HALLMARK_INTERFERON_GAMMA_RESPONSE",
+               "HALLMARK_COMPLEMENT",
+               "HALLMARK_IL6_JAK_STAT3_SIGNALING",
+               "HALLMARK_INFLAMMATORY_RESPONSE",
+               "HALLMARK_TNFA_SIGNALING_VIA_NFKB")
+
+geneName <- "HALLMARK_INFLAMMATORY_RESPONSE"
+
+for (geneName in geneList) {
+  
+  pathGeneList <- unique(subset(gene.set, GO.Term.Accession == geneName)$Associated.Gene.Name)
+  
+  sex <- "F"
+  trt <- "LPS"
+  modelName <- "F"
+  
+  residsF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",
+                            trt,"_10000genes_5lCPM_model",modelName,"_resids.RDS"))
+  
+  residsPathF <- residsF[rownames(residsF) %in% pathGeneList,]
+  
+  metadataF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",
+                              trt,"_10000genes_5lCPM_metadata.RDS"))
+  
+  emremlF <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",trt,
+                            "_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_treatment"))
+  emremlF$qval_status <- qvalue(emremlF$pval_status)$qvalue
+  
+  subset(emremlF, qval_status < .05 & fdr_treatment < .01)
+  
+  colnames(residsPathF) == metadataF$sampleID
+      
+  metadataF$pathMedian <- apply(residsPathF,2,median)
+  metadataF$pathMean <- apply(residsPathF,2,mean)
+  metadataF$status_dom_sub <- factor(metadataF$status_dom_sub, levels = c("S","D"))
+  
+  ggplot(data = metadataF,
+             aes(x = Trt,
+                 y = pathMedian,
+                 fill = status_dom_sub)) +
+    geom_boxplot() +
+        theme_minimal() + theme_bw() +
+        ylab(paste0(geneName," - Gene Expression"))
+  ggsave(paste0(figPaperDir,"3c_",sex,"_pathMedian",geneName,"_",trt,".png"), width = 6, height = 6)
+  
+  ggplot(data = metadataF,
+             aes(x = Trt,
+                 y = pathMedian,
+                 fill = status_dom_sub)) +
+    geom_boxplot() +
+        theme_minimal() + theme_bw() +
+        ylab(paste0(geneName," - Gene Expression"))
+  ggsave(paste0(figPaperDir,"3c_",sex,"_pathMean",geneName,"_",trt,".png"), width = 6, height = 6)
+
+}
+
+```
+
+
+```{r}
+#sex * status * pathway median GE
+### 2A
+# mean GE (resids) of genes in Inflammatory pathways, Ctrl v. Trt boxplot
+
+hallPathName <- "HALLMARK_TNFA_SIGNALING_VIA_NFKB"
+sex <- "F"
+trt <- "LPS"
+
+for (hallPathName in c("HALLMARK_INFLAMMATORY_RESPONSE",
+                       "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+                       "HALLMARK_INTERFERON_ALPHA_RESPONSE",
+                       "HALLMARK_INTERFERON_GAMMA_RESPONSE")) {
+  pathGeneList <- unique(subset(gene.set, GO.Term.Accession == hallPathName)$Associated.Gene.Name)
+  
+  for (sex in c("F","M")) {
+    
+    if (sex == "M") {
+      boxLines <- "gray80"
+    } else {
+      boxLines <- "gray10"
+    }
+    
+    #trt<-"LPS"
+    for (trt in c("LPS","Dex","Gard")) {
+      
+      modelName <- "G"
+      if (trt == "LPS") {
+        modelName <- "F"
+      }
+      
+      residsF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",trt,"only_10000genes_5lCPM_model",modelName,"_resids.RDS"))
+      residsPathF <- residsF[rownames(residsF) %in% pathGeneList,]
+        
+      metadataF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",trt,"only_10000genes_5lCPM_metadata.RDS"))
+      
+      colnames(residsPathF) == metadataF$sampleID
+      
+      metadataF$pathMedian <- apply(residsPathF,2,median)
+      
+      if (trt == "LPS") {
+        if (sex == "M") {
+          trtColor <- lpsM
+          ctrlColor <- ctrlM
+        } else {
+          trtColor <- lpsF
+          ctrlColor <- ctrlF
+        }
+      } else if (trt == "Gard") {
+        if (sex == "M") {
+          trtColor <- gardM
+          ctrlColor <- ctrlM
+        } else {
+          trtColor <- gardF
+          ctrlColor <- ctrlF
+        }
+      } else {
+        if (sex == "M") {
+          trtColor <- dexM
+          ctrlColor <- ctrlM
+        } else {
+          trtColor <- dexF
+          ctrlColor <- ctrlF
+        }
+      }
+      
+      #metadataF$StatTrt <- paste0(metadataF$Trt,"-",metadataF$status_dom_sub)
+      
+      metadataF$status <- factor(metadataF$status_dom_sub, levels = c("S","D"))
+      
+      ggplot(data = metadataF,
+             aes(x = status,
+                 y = pathMedian,
+                 fill = status)) +
+        geom_violin(col = boxLines, draw_quantiles = c(.25,.5,.75)) +
+        theme_minimal() + theme_bw() +
+        #ylim(c(-2.75,2.75)) +
+        ylab(paste0("Median GE ",hallPathName))
+        #cale_alpha_manual(values = c(ctrlColor,trtColor))
+      
+      ggsave(paste0(figPaperDir,"2a_medPathwayGE_",sex,"_",hallPathName,"_",trt,".png"), width = 6, height = 6)
+    }
+  }
+}
+
+hallPathName <- "HALLMARK_TNFA_SIGNALING_VIA_NFKB"
+sex <- "F"
+trt <- "LPS"
+
+for (hallPathName in c("HALLMARK_INFLAMMATORY_RESPONSE",
+                       "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+                       "HALLMARK_INTERFERON_ALPHA_RESPONSE",
+                       "HALLMARK_INTERFERON_GAMMA_RESPONSE",
+                       "HALLMARK_COMPLEMENT",
+                       "HALLMARK_CTRA_UP")) {
+  pathGeneList <- unique(subset(gene.set, GO.Term.Accession == hallPathName)$Associated.Gene.Name)
+  pathGenes <- unique(subset(gene.set, GO.Term.Accession == hallPathName)$Associated.Gene.Name)
+    
+    if (sex == "M") {
+      boxLines <- "gray80"
+    } else {
+      boxLines <- "gray10"
+    }
+    
+    #trt<-"LPS"
+    ### WHY AM I LOOKING AT TRT-CTRL HERE THE SIGNAL IS IN ONLY not TRT CTRL
+    for (trt in c("LPS","Dex","Gard","Ctrl")) {
+      
+      modelName <- "G"
+      if (trt %in% c("LPS","Ctrl")) {
+        modelName <- "F"
+      }
+      
+      countsF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_",trt,"only_10000genes_5lCPM_filteredCounts.RDS"))
+      
+      residsF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_",trt,"only_10000genes_5lCPM_model",modelName,"_resids.RDS"))
+      residsPathF <- residsF[rownames(residsF) %in% pathGeneList,]
+      
+      countsM <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_",trt,"only_10000genes_5lCPM_filteredCounts.RDS"))
+      
+      residsM <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_",trt,"only_10000genes_5lCPM_model",modelName,"_resids.RDS"))
+      residsPathM <- residsM[rownames(residsM) %in% pathGeneList,]
+      
+      
+      
+      #get FDR sig genes
+      trtEmrml <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_",trt,"only_10000genes_5lCPM_model",modelName,"_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status"))
+      #ctrlEmrml <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status"))
+      #sigGenes <- c(rownames(subset(trtEmrml, fdr_status < .2)),rownames(subset(ctrlEmrml, fdr_status < .2)))
+      sigGenes <- rownames(subset(trtEmrml, fdr_status < .2))
+      
+      #top 25%
+      pathGenesF <- rownames(residsPathF)
+      pathCountsF <- countsF[rownames(countsF) %in% pathGenes,]
+      
+      pathCountsF$aveLogCPM <- aveLogCPM(pathCountsF)
+      topGEpathGeneListF <- rownames(pathCountsF)[pathCountsF$aveLogCPM > summary(pathCountsF$aveLogCPM)[5]]
+      residsPathTopGEF <- residsF[rownames(residsF) %in% topGEpathGeneListF,]
+      
+      pathGenesM <- rownames(residsPathM)
+      pathCountsM <- countsM[rownames(countsM) %in% pathGenes,]
+      
+      pathCountsM$aveLogCPM <- aveLogCPM(pathCountsM)
+      topGEpathGeneListM <- rownames(pathCountsM)[pathCountsM$aveLogCPM > summary(pathCountsM$aveLogCPM)[5]]
+      residsPathTopGEM <- residsM[rownames(residsM) %in% topGEpathGeneListM,]
+
+      
+      #FDR < 0.20
+      sigPathGenes <- intersect(sigGenes,pathGenes)
+      
+      residsPathSigGenesF <- residsF[rownames(residsF) %in% sigPathGenes,]
+      residsPathSigGenesM <- residsM[rownames(residsM) %in% sigPathGenes,]
+      
+      metadataF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_",trt,"only_10000genes_5lCPM_metadata.RDS"))
+      metadataM <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_",trt,"only_10000genes_5lCPM_metadata.RDS"))
+      
+      colnames(residsPathF) == metadataF$sampleID
+      colnames(residsPathM) == metadataM$sampleID
+      
+      metadataF$pathMedian <- apply(residsPathF,2,median)
+      metadataF$pathMedianTopGE <- apply(residsPathTopGEF,2,median)
+      metadataF$pathMedianSigGenes <- apply(residsPathSigGenesF,2,median)
+      
+      metadataM$pathMedian <- apply(residsPathM,2,median)
+      metadataM$pathMedianTopGE <- apply(residsPathTopGEM,2,median)
+      metadataM$pathMedianSigGenes <- apply(residsPathSigGenesM,2,median)
+      
+      if (trt == "LPS") {
+        if (sex == "M") {
+          trtColor <- lpsM
+          ctrlColor <- ctrlM
+        } else {
+          trtColor <- lpsF
+          ctrlColor <- ctrlF
+        }
+      } else if (trt == "Gard") {
+        if (sex == "M") {
+          trtColor <- gardM
+          ctrlColor <- ctrlM
+        } else {
+          trtColor <- gardF
+          ctrlColor <- ctrlF
+        }
+      } else {
+        if (sex == "M") {
+          trtColor <- dexM
+          ctrlColor <- ctrlM
+        } else {
+          trtColor <- dexF
+          ctrlColor <- ctrlF
+        }
+      }
+      
+      metadataAll <- rbind.data.frame(metadataF,metadataM)
+      
+      #metadataAll$StatTrtSex <- paste0(metadataAll$Trt,"-",metadataAll$status_dom_sub,"_",metadataAll$sex)
+      metadataAll$StatSex <- paste0(metadataAll$status_dom_sub,"_",metadataAll$sex)
+      metadataAll$StatSex <- factor(metadataAll$StatSex, levels = c("S_M","D_M","S_F","D_F"))
+      
+      # if (trt == "LPS") {
+      #   metadataAll$StatTrtSex <- factor(metadataAll$StatTrtSex, levels = c("Ctrl-S_M","Ctrl-D_M","Ctrl-S_F","Ctrl-D_F",
+      #                                                                 "LPS-S_M","LPS-D_M","LPS-S_F","LPS-D_F"))
+      # } else if (trt == "Dex") {
+      #   metadataAll$StatTrtSex <- factor(metadataAll$StatTrtSex, levels = c("Ctrl-S_M","Ctrl-D_M","Ctrl-S_F","Ctrl-D_F",
+      #                                                                 "Dex-S_M","Dex-D_M","Dex-S_F","Dex-D_F"))
+      # } else {
+      #   metadataAll$StatTrtSex <- factor(metadataAll$StatTrtSex, levels = c("Ctrl-S_M","Ctrl-D_M","Ctrl-S_F","Ctrl-D_F",
+      #                                                                 "Gard-S_M","Gard-D_M","Gard-S_F","Gard-D_F"))
+      # }
+      
+      #drop weird negative resid "SSUR2735"
+      ggplot(data = metadataAll,
+             aes(x = StatSex,
+                 y = pathMedian,
+                 col = StatSex,
+                 fill = StatSex)) +
+        geom_violin(col = boxLines, draw_quantiles = c(.25,.5,.75)) +
+        #geom_beeswarm(draw_quantiles = c(.25,.5,.75)) +
+        #geom_point() +
+        theme_bw() +
+        ylim(c(-1,1)) +
+        ylab(paste0("Median GE ",hallPathName," all"))
+        #scale_alpha_manual(values = c(ctrlColor,trtColor))
+      
+      ggsave(paste0(figPaperDir,"2a_medPathwayGE_",hallPathName,"_",trt,".png"), width = 6, height = 6)
+      
+      ggplot(data = metadataAll,
+             aes(x = StatSex,
+                 y = pathMedianTopGE,
+                 fill = StatSex)) +
+        geom_violin(col = boxLines, draw_quantiles = c(.25,.5,.75)) +
+        theme_bw() +
+        ylim(c(-1,1)) +
+        ylab(paste0("Median GE ",hallPathName," top25%ge"))
+      ggsave(paste0(figPaperDir,"2a_medPathwayGE_top25percent_",hallPathName,"_",trt,".png"), width = 6, height = 6)
+      
+      ggplot(data = metadataAll,
+             aes(x = StatSex,
+                 y = pathMedianSigGenes,
+                 fill = StatSex)) +
+        geom_violin(col = boxLines, draw_quantiles = c(.25,.5,.75)) +
+        theme_bw() +
+        ylim(c(-1,1)) +
+        ylab(paste0("Median GE ",hallPathName," sig status genes"))
+      ggsave(paste0(figPaperDir,"2a_medPathwayGE_sigGenes_",hallPathName,"_",trt,".png"), width = 6, height = 6)
+  }
+}
+
+### what if we show MALE and FEMALE fold change within pathways?
+
+
+### 2b TLR
+# example gene plots
+# GroupII IL6
+# Group I / II / III / IV
+lpsEmremlTrt <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+lpsEmremlStatus <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+for (grp in c("I","II","III","IV")) {
+  grpDir <- paste0(figPaperDir,"Group",grp,"/")
+  dir.create(grpDir)
+  
+  if (grp == "I") {
+    grpGenes <- intersect(rownames(lpsEmremlStatus)[lpsEmremlStatus$fdr_status < .1 & lpsEmremlStatus$beta_status < 0],
+            rownames(lpsEmremlTrt)[lpsEmremlTrt$fdr_treatment < .1 & lpsEmremlTrt$beta_treatment > 0])
+  } else if (grp == "II") {
+    grpGenes <- intersect(rownames(lpsEmremlStatus)[lpsEmremlStatus$fdr_status < .1 & lpsEmremlStatus$beta_status > 0],
+            rownames(lpsEmremlTrt)[lpsEmremlTrt$fdr_treatment < .1 & lpsEmremlTrt$beta_treatment > 0])
+  } else if (grp == "III") {
+    grpGenes <- intersect(rownames(lpsEmremlStatus)[lpsEmremlStatus$fdr_status < .1 & lpsEmremlStatus$beta_status < 0],
+            rownames(lpsEmremlTrt)[lpsEmremlTrt$fdr_treatment < .1 & lpsEmremlTrt$beta_treatment < 0])
+  } else if (grp == "IV") {
+    grpGenes <- intersect(rownames(lpsEmremlStatus)[lpsEmremlStatus$fdr_status < .1 & lpsEmremlStatus$beta_status > 0],
+            rownames(lpsEmremlTrt)[lpsEmremlTrt$fdr_treatment < .1 & lpsEmremlTrt$beta_treatment < 0])
+  }
+  
+  print(grp)
+  print(length(grpGenes))
+  
+  #geneName <- "IL6"
+  
+    for (geneName in grpGenes) {
+      residsF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_modelF_resids.RDS"))
+      metadataF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_metadata.RDS"))
+      
+      all(colnames(residsF) == metadataF$sampleID)
+      
+      metadataF$singleGene <- residsF[which(rownames(residsF) == geneName),]
+      
+      metadataF$TrtStatus <- paste0(metadataF$Trt,"-",metadataF$status_dom_sub)
+      
+      metadataF$status_dom_sub <- factor(metadataF$status_dom_sub, levels = c("S","D"))
+      
+      ggplot(data = metadataF,
+             aes(x = status_dom_sub,
+                 y = singleGene,
+                 col = Trt)) +
+        #geom_violin(draw_quantiles = c(.25,.5,.75)) +
+        geom_jitter(height = 0, width = .1) +
+        geom_smooth(aes(group = Trt),method = "lm", formula = "y~x") +
+        theme_minimal() + theme_bw() + 
+        xlab("Status") + ylab(geneName) +
+        scale_color_manual(values = c(ctrlF,lpsF))
+      
+      ggsave(paste0(grpDir,"2b_GeneExample_",geneName,".png"), width = 4, height = 3)
+      
+      residsFresp <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_modelF_responseResids.RDS"))
+      metadataFresp <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_responseMetadata.RDS"))
+      
+      metadataFresp$singleGene <- residsFresp[which(rownames(residsFresp) == geneName),]
+      metadataFresp$status_dom_sub <- factor(metadataFresp$status_dom_sub, levels = c("S","D"))
+      
+      ggplot(data = metadataF,
+             aes(x = status_dom_sub,
+                 y = singleGene,
+                 fill = status_dom_sub)) +
+        geom_violin(aes(alpha = status_dom_sub), draw_quantiles = c(.25,.5,.75)) +
+        geom_beeswarm(alpha = .5) +
+        geom_hline(yintercept = 0) +
+        #geom_smooth(aes(group = Trt),method = "lm", formula = "y~x") +
+        theme_bw() + theme(legend.position = "none") +
+        xlab("Status") + ylab(geneName) +
+        scale_alpha_manual(values = c(.6,1)) +
+        scale_fill_manual(values = c(lpsF,lpsF))
+      ggsave(paste0(grpDir,"2b_GeneExample_Response_",geneName,".png"), width = 4, height = 3)
+    }
+}
+```
+
+
+
+Figure 3
+```{r}
+
+#3a - upset plot
+softCutoff <- TRUE
+#upset plot of shared status genes
+
+FDRthresh <- 0.10
+FDRSoftCut <- 0.10
+
+#get list of FDR sig Status genes, separate up and down
+femaleLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+femaleGard <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gardonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+femaleDex <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Dexonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+femaleCtrl <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+LPSup <- rownames(subset(femaleLPS, beta_status > 0 & fdr_status < FDRthresh))
+LPSdown <- rownames(subset(femaleLPS, beta_status < 0 & fdr_status < FDRthresh))
+Gardup <- rownames(subset(femaleGard, beta_status > 0 & fdr_status < FDRthresh))
+Garddown <- rownames(subset(femaleGard, beta_status < 0 & fdr_status < FDRthresh))
+Dexup <- rownames(subset(femaleDex, beta_status > 0 & fdr_status < FDRthresh))
+Dexdown <- rownames(subset(femaleDex, beta_status < 0 & fdr_status < FDRthresh))
+Ctrlup <- rownames(subset(femaleCtrl, beta_status > 0 & fdr_status < FDRthresh))
+Ctrldown <- rownames(subset(femaleCtrl, beta_status < 0 & fdr_status < FDRthresh))
+
+if (softCutoff) {
+LPSupSoft <- rownames(subset(femaleLPS, beta_status > 0 & fdr_status < (FDRthresh + FDRSoftCut) & fdr_status > FDRthresh))
+LPSdownSoft <- rownames(subset(femaleLPS, beta_status < 0 & fdr_status < (FDRthresh + FDRSoftCut) & fdr_status > FDRthresh))
+GardupSoft <- rownames(subset(femaleGard, beta_status > 0 & fdr_status < (FDRthresh + FDRSoftCut) & fdr_status > FDRthresh))
+GarddownSoft <- rownames(subset(femaleGard, beta_status < 0 & fdr_status < (FDRthresh + FDRSoftCut) & fdr_status > FDRthresh))
+DexupSoft <- rownames(subset(femaleDex, beta_status > 0 & fdr_status < (FDRthresh + FDRSoftCut) & fdr_status > FDRthresh))
+DexdownSoft <- rownames(subset(femaleDex, beta_status < 0 & fdr_status < (FDRthresh + FDRSoftCut) & fdr_status > FDRthresh))
+CtrlupSoft <- rownames(subset(femaleCtrl, beta_status > 0 & fdr_status < (FDRthresh + FDRSoftCut) & fdr_status > FDRthresh))
+CtrldownSoft <- rownames(subset(femaleCtrl, beta_status < 0 & fdr_status < (FDRthresh + FDRSoftCut) & fdr_status > FDRthresh))
+
+LPSup <- c(LPSup,LPSupSoft[LPSupSoft %in% c(Gardup,Garddown,Dexup,Dexdown,Ctrlup,Ctrldown)])
+LPSdown <- c(LPSdown,LPSdownSoft[LPSdownSoft %in% c(Gardup,Garddown,Dexup,Dexdown,Ctrlup,Ctrldown)])
+
+Gardup <- c(Gardup,GardupSoft[GardupSoft %in% c(LPSup,LPSdown,Dexup,Dexdown,Ctrlup,Ctrldown)])
+Garddown <- c(Garddown,GarddownSoft[GarddownSoft %in% c(LPSup,LPSdown,Dexup,Dexdown,Ctrlup,Ctrldown)])
+
+Dexup <- c(Dexup,DexupSoft[DexupSoft %in% c(Gardup,Garddown,LPSup,LPSdown,Ctrlup,Ctrldown)])
+Dexdown <- c(Dexdown,DexdownSoft[DexdownSoft %in% c(Gardup,Garddown,LPSup,LPSdown,Ctrlup,Ctrldown)])
+
+Ctrlup <- c(Ctrlup,CtrlupSoft[CtrlupSoft %in% c(Gardup,Garddown,Dexup,Dexdown,LPSup,LPSdown)])
+Ctrldown <- c(Ctrldown,CtrldownSoft[CtrldownSoft %in% c(Gardup,Garddown,Dexup,Dexdown,LPSup,LPSdown)])
+}
+
+###upset plot
+listInput <- list(LPSup,
+                  LPSdown,
+                  Gardup,
+                  Garddown,
+                  Dexup,
+                  Dexdown,
+                  Ctrlup,
+                  Ctrldown)
+
+names(listInput) <- c("LPSup",
+                  "LPSdown",
+                  "Gardup",
+                  "Garddown",
+                  "Dexup",
+                  "Dexdown",
+                  "Ctrlup",
+                  "Ctrldown")
+
+testList <- fromList(listInput)
+
+if (softCutoff) {
+  png(paste0(figPaperDir,"3a_upsetPlot_Status_fdr",FDRthresh,"_soft",FDRSoftCut,".png"), width = 800, height = 800)
+} else {
+  png(paste0(figPaperDir,"3a_upsetPlot_Status_fdr",FDRthresh,".png"), width = 800, height = 800)
+}
+upset(data = testList, order.by = "freq", nsets = length(names(listInput)), nintersects = 20, text.scale = 2.5)
+dev.off()
+
+#3b 
+# Dex beta-beta plot
+femaleLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+femaleGard <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gardonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+femaleDex <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Dexonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+femaleCtrl <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+#beta-beta by pathway
+#inflamm
+c("HALLMARK_INFLAMMATORY_RESPONSE","HALLMARK_TNFA_SIGNALING_VIA_NFKB")
+#interferon
+c("HALLMARK_INTERFERON_ALPHA_RESPONSE","HALLMARK_INTERFERON_GAMMA_RESPONSE")
+
+trtX <- "LPS"
+trtY <- "Gard"
+
+for (trtX in c("LPS","Gard","Ctrl","Dex")) {
+  for (trtY in c("LPS","Gard","Ctrl","Dex")) {    
+    emrmlX <- get(paste0("female",trtX))
+    emrmlY <- get(paste0("female",trtY))
+    
+    pathGeneList <- unique(subset(gene.set, GO.Term.Accession %in% c("HALLMARK_INFLAMMATORY_RESPONSE","HALLMARK_TNFA_SIGNALING_VIA_NFKB"))$Associated.Gene.Name)
+    
+    #common set
+    commonGenes <- unique(intersect(intersect(rownames(emrmlX),rownames(emrmlY)),pathGeneList))
+    
+    compTrtX <- emrmlX[rownames(emrmlX) %in% commonGenes,]; compTrtY <- emrmlY[rownames(emrmlY) %in% commonGenes,]
+    
+    compTrtX$gene <- rownames(compTrtX); compTrtY$gene <- rownames(compTrtY)
+    
+    compBetas <- merge(compTrtX,compTrtY, by = "gene", suffixes = c(".x",".y"))
+    compR <- round(cor(compBetas$beta_status.x,compBetas$beta_status.y), digits = 2)
+    
+    ggplot(compBetas,
+           aes(x = beta_status.x,
+               y = beta_status.y)) +
+      geom_point() +
+      geom_smooth(method = "lm", formula = "y~x") +
+      xlab(paste0("Status Beta ",trtX," only")) +
+      ylab(paste0("Status Beta ",trtY," only")) +
+      ggtitle(paste0(trtY," v. ",trtX," Inflammatory Gene Set Betas"),
+              subtitle = paste0("R=",compR))
+    ggsave(paste0(figPaperDir,"3c_beta-beta_Inflamm_pathways_",trtY,"v",trtX,".png"), width = 4, height = 4)
+  }
+}
+
+
+for (trtX in c("LPS","Gard","Ctrl","Dex")) {
+  for (trtY in c("LPS","Gard","Ctrl","Dex")) {    
+    emrmlX <- get(paste0("female",trtX))
+    emrmlY <- get(paste0("female",trtY))
+    
+    pathGeneList <- unique(subset(gene.set, GO.Term.Accession %in% c("HALLMARK_INTERFERON_ALPHA_RESPONSE","HALLMARK_INTERFERON_GAMMA_RESPONSE"))$Associated.Gene.Name)
+    
+    #common set
+    commonGenes <- unique(intersect(intersect(rownames(emrmlX),rownames(emrmlY)),pathGeneList))
+    
+    compTrtX <- emrmlX[rownames(emrmlX) %in% commonGenes,]; compTrtY <- emrmlY[rownames(emrmlY) %in% commonGenes,]
+    
+    compTrtX$gene <- rownames(compTrtX); compTrtY$gene <- rownames(compTrtY)
+    
+    compBetas <- merge(compTrtX,compTrtY, by = "gene", suffixes = c(".x",".y"))
+    compR <- round(cor(compBetas$beta_status.x,compBetas$beta_status.y), digits = 2)
+    
+    ggplot(compBetas,
+           aes(x = beta_status.x,
+               y = beta_status.y)) +
+      geom_point() +
+      geom_smooth(method = "lm", formula = "y~x") +
+      xlab(paste0("Status Beta ",trtX," only")) +
+      ylab(paste0("Status Beta ",trtY," only")) +
+      ggtitle(paste0(trtY," v. ",trtX," Interferon Gene Set Betas"),
+              subtitle = paste0("R=",compR))
+    ggsave(paste0(figPaperDir,"3c_beta-beta_Interferon_pathways_",trtY,"v",trtX,".png"), width = 4, height = 4)
+  }
+}
+```
+
+Figure 4 Resampling 
+```{r}
+geneSet <- unique(gene.set)
+geneSet <- geneSet[order(geneSet$Category),]
+
+#X-Y plot 
+## X = Population Beta
+## Y = Resampling T-Statistic
+longSampleResults <- readRDS(file = paste0(outDir,"longitudinalSampleResults.RDS"))
+longSampleResultsCtrl <- readRDS(file = paste0(outDir,"longitudinalSampleResultsCtrl.RDS"))
+
+
+
+longSampleResultsPlot <- subset(longSampleResults, emmremlQValStatus < .1)
+longSampleResultsCtrlPlot <- subset(longSampleResultsCtrl, emmremlQValStatus < .1)
+
+longSampleResultsCtrlPlot <- longSampleResultsCtrlPlot[longSampleResultsCtrlPlot$geneNamePlot %in% longSampleResultsPlot$geneNamePlot,]
+
+
+yMax <- ceiling(max(abs(c(longSampleResultsPlot$tTestStatStatus,longSampleResultsCtrlPlot$tTestStatStatus))))
+xMax <- ceiling(max(abs(c(longSampleResultsPlot$emmremlStdBetaStatus,longSampleResultsCtrlPlot$emmremlStdBetaStatus))))
+
+
+ggplot(data = longSampleResults,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  geom_point() + theme_minimal() + theme_bw() +
+  ylab("Longitudinal Sample T-Test") +
+  xlab("Population Sample Status Beta")
+
+
+longSampleResults$immune <- FALSE
+longSampleResults$signal <- FALSE
+
+longSampleResults$IFNalpha <- FALSE
+longSampleResults$IFNgamma <- FALSE
+longSampleResults$TNFANFKB <- FALSE
+longSampleResults$Inflamm <- FALSE
+longSampleResults$Complement <- FALSE
+longSampleResults$IL6JAK <- FALSE
+
+
+
+r <- 2
+
+for (r in 1:dim(longSampleResults)[1]) {
+  if (longSampleResults$geneNamePlot[r] %in% geneSet$Associated.Gene.Name) {
+    paths <- geneSet$GO.Term.Accession[which(geneSet$Associated.Gene.Name == longSampleResults$geneNamePlot[r])]
+    cats <- geneSet$Category[which(geneSet$Associated.Gene.Name == longSampleResults$geneNamePlot[r])]
+    
+    #categories
+    if ("immune" %in% cats) {
+      longSampleResults$immune[r] <- TRUE
+    }
+    if ("signaling" %in% cats) {
+      longSampleResults$signal[r] <- TRUE
+    }
+    
+    #pathways
+    if ("HALLMARK_INTERFERON_ALPHA_RESPONSE" %in% paths) {
+      longSampleResults$IFNalpha[r] <- TRUE
+    }
+    if ("HALLMARK_INTERFERON_GAMMA_RESPONSE" %in% paths) {
+      longSampleResults$IFNgamma[r] <- TRUE
+    }
+    if ("HALLMARK_TNFA_SIGNALING_VIA_NFKB" %in% paths) {
+      longSampleResults$TNFANFKB[r] <- TRUE
+    }
+    if ("HALLMARK_INFLAMMATORY_RESPONSE" %in% paths) {
+      longSampleResults$Inflamm[r] <- TRUE
+    }
+    if ("HALLMARK_COMPLEMENT" %in% paths) {
+      longSampleResults$Complement[r] <- TRUE
+    }
+    if ("HALLMARK_IL6_JAK_STAT3_SIGNALING" %in% paths) {
+      longSampleResults$IL6JAK[r] <- TRUE
+    }
+  }
+}
+
+longSampleResultsPlot <- longSampleResults[order(longSampleResults$immune, decreasing = FALSE),]
+
+ggplot(data = longSampleResultsPlot,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus,
+           col = immune)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  geom_point() + theme_minimal() + theme_bw() +
+  scale_color_manual(values = c("grey90","orange")) +
+  ylab("Longitudinal Sample T-Test") +
+  xlab("Population Sample Status Beta")
+
+longSampleResults$immuneORsignal <- longSampleResults$immune | longSampleResults$signal
+
+longSampleResultsPlot <- longSampleResults[order(longSampleResults$immuneORsignal, decreasing = FALSE),]
+
+ggplot(data = longSampleResultsPlot,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus,
+           col = immuneORsignal)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  geom_point(size = 4) + theme_minimal() + theme_bw() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 14)) +
+  scale_color_manual(values = c("grey90","orange")) +
+  ylab("Longitudinal Sample T-Test") +
+  xlab("Population Sample Status Beta")
+ggsave(paste0(figPaperDir,"4a_longResample_ttest_v_emreml_statusEffect_immuneORsignal.png"), width = 6, height = 4)
+
+#longSampleResults$keyPathway <- longSampleResults$IFNalpha | longSampleResults$IFNgamma | longSampleResults$TNFANFKB | longSampleResults$Inflamm | longSampleResults$Complement | longSampleResults$IL6JAK
+
+longSampleResults$keyPathway <- longSampleResults$IFNgamma | longSampleResults$TNFANFKB | longSampleResults$Inflamm | longSampleResults$Complement
+
+longSampleResultsPlot <- longSampleResults[order(longSampleResults$keyPathway, decreasing = FALSE),]
+
+ggplot(data = longSampleResultsPlot,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus,
+           col = keyPathway)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  geom_point(size = 4) + theme_minimal() + theme_bw() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 14)) +
+  scale_color_manual(values = c("grey90","coral")) +
+  ylab("Longitudinal Sample T-Test") +
+  xlab("Population Sample Status Beta")
+ggsave(paste0(figPaperDir,"4a_longResample_ttest_v_emreml_statusEffect_keyPathway.png"), width = 6, height = 4)
+
+
+longSampleResultsPlot <- longSampleResults[order(longSampleResults$Inflamm, decreasing = FALSE),]
+
+ggplot(data = longSampleResultsPlot,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus,
+           col = Inflamm)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  geom_point(size = 4) + theme_minimal() + theme_bw() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 14)) +
+  scale_color_manual(values = c("grey90","red")) +
+  ylab("Longitudinal Sample T-Test") +
+  xlab("Population Sample Status Beta")
+ggsave(paste0(figPaperDir,"4a_longResample_ttest_v_emreml_statusEffect_Inflammation.png"), width = 6, height = 4)
+
+#with up/down colors
+longSampleResultsPlot$keyPathUpDown <- ifelse(longSampleResultsPlot$tTestStatStatus > 0, "up","down")
+longSampleResultsPlot$keyPathUpDown <- ifelse(longSampleResultsPlot$keyPathway, longSampleResultsPlot$keyPathUpDown, "none")
+
+longSampleResultsPlot <- longSampleResultsPlot[order(longSampleResultsPlot$keyPathway, decreasing = FALSE),]
+
+ggplot(data = longSampleResultsPlot,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus,
+           col = keyPathUpDown)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  geom_point(size = 4) + theme_minimal() + theme_bw() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 14)) +
+  scale_color_manual(values = c("#406F8B","grey90","#A3D65A")) +
+  ylim(c(-yMax,yMax)) + xlim(c(-xMax,xMax)) +
+  ylab("Longitudinal Sample T-Test") +
+  xlab("Population Sample Status Beta")
+ggsave(paste0(figPaperDir,"4a_longResample_ttest_v_emreml_statusEffect_keyPathwayUpDown.png"), width = 6, height = 4)
+
+
+
+## 4B control long samples
+
+
+
+
+plotSigOnly <- TRUE
+if (plotSigOnly) {
+  longSampleResultsCtrlPlot <- subset(longSampleResultsCtrl, emmremlQValPreg < .1)
+} else {
+  longSampleResultsCtrlPlot <- longSampleResultsCtrl
+}
+
+fdrThresh <- .2
+
+ggplot(longSampleResultsCtrlPlot) +
+geom_histogram(aes(x = tTestStatPreg,
+                   fill = ifelse(emmremlQValPreg < fdrThresh,
+                                 ifelse(emmremlStdBetaPreg > 0,"sigUp","sigDn"),"n.s.")), bins = 50) +
+labs(fill = "sig in\nemmreml")
+
+ggplot(longSampleResultsCtrlPlot) +
+geom_histogram(aes(x = meanGEpreg - meanGEnonpreg,
+                   fill = ifelse(emmremlQValPreg < fdrThresh,
+                                 ifelse(emmremlStdBetaPreg > 0,"sigUp","sigDn"),"n.s.")), bins = 50) +
+labs(fill = "sig in\nemmreml")
+
+if (plotSigOnly) {
+  longSampleResultsCtrlPlot <- subset(longSampleResultsCtrl, emmremlQValStatus < .1)
+} else {
+  longSampleResultsCtrlPlot <- longSampleResultsCtrlPlot
+}
+
+
+ggplot(longSampleResultsCtrlPlot) +
+  geom_histogram(aes(x = tTestStatStatus,
+                   fill = ifelse(emmremlQValStatus < fdrThresh,
+                                 ifelse(emmremlStdBetaStatus > 0,"sigUp","sigDn"),"n.s.")), bins = 50) +
+labs(fill = "sig in\nemmreml")
+
+ggplot(longSampleResultsCtrlPlot) +
+  geom_point(aes(x = emmremlStdBetaStatus,
+                 y = tTestStatStatus,
+                   col = wTestPValStatus < 0.05)) +
+labs(col = "sig in\nT-Test")
+
+### match color of test plot
+longSampleResultsCtrlPlot$keyPathUpDown <- ifelse(longSampleResultsCtrlPlot$geneNamePlot %in% subset(longSampleResultsPlot, keyPathUpDown == "up")$geneNamePlot, "up",
+                                                  ifelse(longSampleResultsCtrlPlot$geneNamePlot %in% subset(longSampleResultsPlot, keyPathUpDown == "down")$geneNamePlot, "down","zone"))
+longSampleResultsCtrlPlot <- longSampleResultsCtrlPlot[order(longSampleResultsCtrlPlot$keyPathUpDown, decreasing = TRUE),]
+
+
+ggplot(data = longSampleResultsCtrlPlot,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  ylim(c(-11,11)) +
+  geom_point(size = 2, col = "gray65") + theme_minimal() + theme_bw() +
+  theme(axis.text = element_text(size = 16, color = "black"),
+        axis.title = element_text(size = 14, color = "black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  ylim(c(-yMax,yMax)) + xlim(c(-xMax,xMax)) +
+  ylab("Longitudinal Sample T-Test") +
+  xlab("Population Sample Status Beta")
+ggsave(paste0(figPaperDir,"4a_longResample_inSub_ttest_v_emreml_statusEffect.png"), width = 4, height = 4)
+
+ggplot(data = longSampleResultsCtrlPlot,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus,
+           col = keyPathUpDown)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  ylim(c(-11,11)) +
+  geom_point(size = 2) + theme_minimal() + theme_bw() +
+  theme(axis.text = element_text(size = 16, color = "black"),
+        axis.title = element_text(size = 14, color = "black"),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        legend.position = "none") +
+  scale_color_manual(values = c("#406F8B","#A3D65A","grey65")) +
+  ylim(c(-yMax,yMax)) + xlim(c(-xMax,xMax)) +
+  ylab("Longitudinal Sample T-Test") +
+  xlab("Population Sample Status Beta")
+ggsave(paste0(figPaperDir,"4a_longResample_inSub_ttest_v_emreml_statusEffect_keyPathwayUpDown.png"), width = 4, height = 4)
+
+ggplot(data = longSampleResultsPlot,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus,
+           col = keyPathUpDown)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  geom_point(size = 2) + theme_minimal() + theme_bw() +
+  theme(axis.text = element_text(size = 10, color = "black"),
+        axis.title = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "none") +
+  scale_color_manual(values = c("#406F8B","grey75","#A3D65A")) +
+  ylim(c(-yMax,yMax)) + xlim(c(-xMax,xMax)) +
+  ylab("Dominance Status Effect\n(T-statistic; Longitudinal Sample)") +
+  xlab("Dominance Status Effect\n(Cross-Sectional Sample)")
+ggsave(paste0(figPaperDir,"4a_longResample_ttest_v_emreml_statusEffect_keyPathwayUpDown.png"), width = 4, height = 4)
+
+
+
+length(longSampleResultsCtrlPlot$statusDirConsistent)
+binom.test(313,514,.5)
+
+sum(longSampleResultsCtrl$statusSigConsistent[longSampleResultsCtrl$geneNamePlot %in% longSampleResultsPlot$geneNamePlot[longSampleResultsPlot$statusSigConsistent]])
+
+
+prop.test(c(313,454),c(514,514),alternative = "less")$p.value
+fisher.test(matrix(c(313,454,514,514), nrow = 2, byrow = T), alternative = "less")
+
+
+
+testCor <- cor.test(longSampleResultsPlot$emmremlStdBetaStatus, longSampleResultsPlot$tTestStatStatus, method = "pearson")
+testCor$estimate
+testCor$p.value
+
+ctrlCor <- cor.test(longSampleResultsCtrlPlot$emmremlStdBetaStatus, longSampleResultsCtrlPlot$tTestStatStatus, method = "pearson")
+ctrlCor$estimate
+ctrlCor$p.value
+
+ggplot(data = longSampleResultsCtrlPlot,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  ylim(c(-11,11)) +
+  geom_point(size = 2, alpha = .2) + theme_minimal() + theme_bw() +
+  geom_smooth(formula = "y~x", method = "lm")
+
+ggplot(data = longSampleResultsPlot,
+       aes(x = emmremlStdBetaStatus,
+           y = tTestStatStatus)) +
+  geom_hline(yintercept = 0) + 
+  geom_vline(xintercept = 0) +
+  ylim(c(-11,11)) +
+  geom_point(size = 2, alpha = .2) + theme_minimal() + theme_bw() +
+  geom_smooth(formula = "y~x", method = "lm")
+
+```
+
+
+```{r gene inset}
+#genes that change in population and individuals across status change
+
+
+geneList <- c("IL7R","SERPINB2","BANK1","SEMA4D")
+
+### for each gene in geneList, plot the individal change in GE pre-post status change
+geneName <- "BANK1"
+for (geneName in geneList) {
+  pathGeneList <- geneName
+  
+  sex <- "F"
+  trt <- "LPS"
+  modelName <- "F"
+  
+  residsF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",trt,"only_10000genes_5lCPM_model",modelName,"_resids.RDS"))
+  
+  residsPathF <- residsF[rownames(residsF) %in% pathGeneList,]
+  
+  metadataF <- readRDS(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_",sex,"_",trt,"only_10000genes_5lCPM_metadata.RDS"))
+  
+  colnames(residsPathF) == metadataF$sampleID
+      
+  metadataF$pathMedian <- residsPathF
+  metadataF$status_dom_sub <- factor(metadataF$status_dom_sub, levels = c("S","D"))
+  
+  ggplot(data = metadataF,
+             aes(x = status_dom_sub,
+                 y = pathMedian)) +
+    geom_boxplot(col = "gray70") +
+    geom_jitter(width = .1, height = 0, col = "gray70") +
+        #geom_hline(yintercept = 0, col = "gray30") +
+        theme_minimal() + theme_bw() +
+        ylab(paste0(geneName," - Gene Expression"))
+  ggsave(paste0(figPaperDir,"4c_medGE_",sex,"_",geneName,"_",trt,".png"), width = 6, height = 6)
+  
+  #now highlight the resampled individuals
+  #dom-dub resamp
+    ### Find the repeat animals S/D
+  repeatSamples <- names(table(metadataF$correctsampleID)[table(metadataF$correctsampleID) > 1])
+  
+  ### find the repeat animals preg/not-preg
+  s <- repeatSamples[1]
+  doubleStatus <- vector()
+  sampleID <- vector()
+  pregTF <- vector()
+  status <- vector()
+  animalID <- vector()
+  
+  for (s in repeatSamples) {
+    #print(s)
+    if (length(unique(subset(metaStatus, animal_id == s)$status_dom_sub)) > 1) {
+      #print("duplicate")
+      doubleStatus <- c(doubleStatus,s)
+      
+      animalMeta <- subset(metaStatus, animal_id == s)
+      sampleID <- c(sampleID,animalMeta$sampleID)
+      pregTF <- c(pregTF,animalMeta$pregStatusBackDate35)
+      status <- c(status,animalMeta$status_dom_sub)
+      animalID <- c(animalID,animalMeta$animal_id)
+      
+    } else {
+      #print("nope")
+    }
+  }
+  
+  statusResample <- cbind.data.frame(sampleID,pregTF,status,animalID)
+  
+  pregMismatch <- c("SSUR1400","SSUR1485","SSUR1474","SSUR1605","SSUR1781","SSUR2229","SSUR1862","SSUR1905","SSUR1472")
+  statusResample <- statusResample[!statusResample$sampleID %in% pregMismatch,]
+  
+  #pull data
+  metadataF$resample <- ifelse(metadataF$correctsampleID %in% statusResample$animalID, TRUE, FALSE)
+  metadataFResample <- subset(metadataF, resample)
+  
+  ## use a loop to calclate the median before and after for each individual
+  females <- unique(metadataFResample$correctsampleID)
+  S <- vector()
+  D <- vector()
+  
+  f <- "VVHF110"
+  for (f in females) {
+    if (geneName == "SERPINB2") {
+      S <- c(S,min(subset(metadataFResample, correctsampleID == f & status_dom_sub == "S")$pathMedian))
+      D <- c(D,max(subset(metadataFResample, correctsampleID == f & status_dom_sub == "D")$pathMedian))
+    } else {
+      S <- c(S,max(subset(metadataFResample, correctsampleID == f & status_dom_sub == "S")$pathMedian))
+      D <- c(D,min(subset(metadataFResample, correctsampleID == f & status_dom_sub == "D")$pathMedian))
+    }
+  }
+  
+  resamplePlot <- melt(cbind.data.frame(females,S,D))
+  colnames(resamplePlot) <- c("females","status_dom_sub","pathMedian")
+  
+  #add to plot
+  ggplot() +
+    geom_boxplot(aes(x = metadataF$status_dom_sub,
+                     y = metadataF$pathMedian), col = "gray70") +
+    geom_point(aes(x = metadataF$status_dom_sub,
+                     y = metadataF$pathMedian), col = "gray70") +
+    geom_point(aes(x = resamplePlot$status_dom_sub,
+                   y = resamplePlot$pathMedian)) +
+    geom_line(aes(x = resamplePlot$status_dom_sub,
+                   y = resamplePlot$pathMedian,
+                  group = resamplePlot$females)) +
+        #geom_hline(yintercept = 0, col = "gray30") +
+        theme_minimal() + theme_bw() +
+        ylab(paste0(geneName," - Gene Expression"))
+  ggsave(paste0(figPaperDir,"4c_medGE_",sex,"_",geneName,"_",trt,"_withResample.png"), width = 6, height = 6)
+}
+
+```
+
+
+```{r pathway inset}
+#genes that change in population and individuals across status change
+
+geneList <- longSampleResults$geneNamePlot[longSampleResults$keyPathway]
+
+trt <- "LPS"
+
+lpsPlot <- subset(longSampleResults, geneNamePlot %in% geneList & treatment == "LPS")
+
+lpsPlot <- lpsPlot[,colnames(lpsPlot) %in% c("emmremlStdBetaStatus","geneNamePlot","meanGEdom","meanGEsub")]
+
+colnames(lpsPlot)[1:3] <- c("geneName","D","S")
+
+lpsPlotUp <- subset(lpsPlot, emmremlStdBetaStatus > 0)
+lpsPlotDown <- subset(lpsPlot, emmremlStdBetaStatus < 0)
+
+lpsPlotMelt <- melt(lpsPlot[,1:3])
+lpsPlotUp <- melt(lpsPlotUp[,1:3])
+lpsPlotDown <- melt(lpsPlotDown[,1:3])
+
+lpsPlotMelt$variable <- factor(lpsPlotMelt$variable, levels = c("S","D"))
+lpsPlotUp$variable <- factor(lpsPlotUp$variable, levels = c("S","D"))
+lpsPlotDown$variable <- factor(lpsPlotDown$variable, levels = c("S","D"))
+
+ggplot(data = lpsPlotUp,
+       aes(x = variable,
+           y = value,
+           group = geneName)) +
+  geom_line(linewidth = 1.5, col = "coral") +
+  theme_minimal() + theme_bw() + 
+  ylab("Mean GE in Long. Samples") + xlab("Status") +
+  ggtitle("Key Pathway Genes Sig Up in Dom F Meerkats",
+          subtitle = paste0("Resampled GE Values, ",trt,", Treatment, FDR < 0.10"))
+ggsave(paste0(figPaperDir,"4b_Resample_GeneValues_keyPathsLPS_Up.png"), width = 4, height = 4)
+
+ggplot(data = lpsPlotDown,
+       aes(x = variable,
+           y = value,
+           group = geneName)) +
+  geom_line(linewidth = 1.5, col = "coral") +
+  theme_minimal() + theme_bw() + 
+  ylab("Mean GE in Long. Samples") + xlab("Status") +
+  ggtitle("Key Pathway Genes Sig Down in Dom F Meerkats",
+          subtitle = paste0("Resampled GE Values, ",trt,", Treatment, FDR < 0.10"))
+ggsave(paste0(figPaperDir,"4b_Resample_GeneValues_keyPathsLPS_Down.png"), width = 4, height = 4)
+
+#add color change to multi plot
+lpsPlotMelt$emmremlStdBetaStatus <- c(lpsPlot$emmremlStdBetaStatus,lpsPlot$emmremlStdBetaStatus)
+
+ggplot(data = lpsPlotMelt,
+       aes(x = variable,
+           y = value,
+           group = geneName,
+           col = emmremlStdBetaStatus > 0)) +
+  geom_line(linewidth = 1) +
+  theme_minimal() + theme_bw() + 
+  theme(legend.position = "none") +
+  ylab("Mean GE in Long. Samples") + xlab("Status") +
+  scale_color_manual(values = c("#406F8B","#A3D65A")) +
+  ggtitle("Key Pathway Genes Genes Sig DIFF in Dom F Meerkats",
+          subtitle = paste0("Resampled GE Values, ",trt,", Treatment, FDR < 0.10"))
+ggsave(paste0(figPaperDir,"4b_Resample_GeneValues_keyPathsLPS_All.png"), width = 6, height = 4)
+
+```
+
+
+
+### TODO ### - need to add macaques to the beta-beta comparison
+
+
+```{r Figure 4 GSEA}
+#tested pathways -- immune, signalling, pathway only
+testedPaths <- unique(subset(gene.set, Category %in% c("signaling","pathway","immune","ctra") & GO.Term.Accession != "HALLMARK_INFLAMMASOME")$GO.Term.Accession)
+
+pointSize <- 1
+axisSize <- .25
+labelSize <- 14
+numberSize <- 10
+
+
+allSsurGSEA <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/gsea_trtstatuspreg_GSEA_allResults.txt",
+                      sep = ",", header = TRUE)
+
+#didn't test Inflammasome in all spp
+allSsurGSEA <- subset(allSsurGSEA, !V1 == "HALLMARK_INFLAMMASOME")
+
+#bring in results from multi-spp analysis
+allMultiSppGSEA <- read.table("~/Dropbox (Personal)/socialSignal/output/gsea_multiSPP_GSEA_allResults.txt", sep = ",", header = T)
+
+colnames(allSsurGSEA)[c(1,4,5)] <- colnames(allMultiSppGSEA)[c(1,4,5)] <- c("pathway","ESup","ESdown")
+
+ssurStatus <- subset(allSsurGSEA, trt %in% c("Ctrl","LPS") & c == "status")
+#replace meerkat ES in all MultiSppGSEA
+
+ssurStatus <- ssurStatus[,colnames(ssurStatus) != "c"]
+#
+
+#swap trt LPS plus and Ctrl minus
+ssurStatus$trt <- ifelse(ssurStatus$trt == "LPS", "plus", "minus")
+ssurStatus$shortName <- ifelse(ssurStatus$trt == "plus", "meerkatBetasFLPS_plusTrt", "meerkatBetasFLPS_minusTrt")
+
+allMultiSppGSEA <- subset(allMultiSppGSEA, ! shortName %in% c("meerkatBetasFLPS_plusTrt","meerkatBetasFLPS_minusTrt"))
+
+allMultiSppGSEA <- rbind.data.frame(allMultiSppGSEA,ssurStatus)
+
+#limit to SGE1, Baboon, Meerkats
+multi3SppGSEA <- subset(allMultiSppGSEA, shortName %in% c("BaboonMale_plusTrt","BaboonMale_minusTrt",
+                                                          "BaboonFemale_plusTrt","BaboonFemale_minusTrt",
+                                                          "SGE1_plusTrt","SGE1_minusTrt",
+                                                          "meerkatBetasFLPS_plusTrt","meerkatBetasFLPS_minusTrt"))
+
+multi3SppGSEA$species <- ifelse(multi3SppGSEA$shortName %in% c("BaboonMale_plusTrt","BaboonMale_minusTrt",
+                                                          "BaboonFemale_plusTrt","BaboonFemale_minusTrt"), "Baboon",
+                                ifelse(multi3SppGSEA$shortName %in% c("SGE1_plusTrt","SGE1_minusTrt"), "Macaque", "Meerkat"))
+
+multi3SppGSEA$sex <- ifelse(multi3SppGSEA$species %in% c("Macaque","Meerkat"), "F",
+                            ifelse(multi3SppGSEA$shortName %in% c("BaboonFemale_plusTrt","BaboonFemale_minusTrt"), "F", "M"))
+
+multi3SppGSEA <- subset(multi3SppGSEA, pathway %in% testedPaths)
+
+multi3SppGSEA$pvalUpAdj <- multi3SppGSEA$pval_upreg * 27
+multi3SppGSEA$pvalDnAdj <- multi3SppGSEA$pval_downreg * 27
+
+immunePathways <- c("HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+                    "HALLMARK_INFLAMMATORY_RESPONSE",
+                    "HALLMARK_INTERFERON_ALPHA_RESPONSE",
+                    "HALLMARK_INTERFERON_GAMMA_RESPONSE",
+                    "HALLMARK_COMPLEMENT",
+                    "HALLMARK_CTRA_UP",
+                    "HALLMARK_CTRA_DOWN")
+
+multi3SppGSEAImmune <- subset(allMultiSppGSEA, pathway %in% immunePathways)
+
+#for baseline and control
+for (Trt in c("plus","minus")) {
+  #compare every combo of species-sex, plot ES if EITHER is significant, all and immune
+  for (sppA in c("Baboon_M","Baboon_F","Macaque_F","Meerkat_F")) {
+    for (sppB in c("Baboon_M","Baboon_F","Macaque_F","Meerkat_F")) {
+      if (sppA != sppB) {
+        aSpp <- strsplit(sppA, "_")[[1]][1]
+        aSex <- strsplit(sppA, "_")[[1]][2]
+        bSpp <- strsplit(sppB, "_")[[1]][1]
+        bSex <- strsplit(sppB, "_")[[1]][2]
+        
+        sigPaths <- unique(c(subset(multi3SppGSEA, species == aSpp & sex == aSex & trt == Trt & (pvalUpAdj < .05 | pvalDnAdj < .05))$pathway,
+                             subset(multi3SppGSEA, species == bSpp & sex == bSex & trt == Trt & (pvalUpAdj < .05 | pvalDnAdj < .05))$pathway))
+        
+        aES <- vector()
+        bES <- vector()
+        aPval <- vector()
+        bPval <- vector()
+        
+        for (p in sigPaths) {
+          #get more sig data from A
+          aUp <- ifelse(subset(multi3SppGSEA, species == aSpp & sex == aSex & trt == Trt & pathway == p)$pvalUpAdj <
+                          subset(multi3SppGSEA, species == aSpp & sex == aSex & trt == Trt & pathway == p)$pvalDnAdj,
+                        TRUE, FALSE)
+          
+          if (aUp) {
+            aES <- c(aES,subset(multi3SppGSEA, species == aSpp & sex == aSex & trt == Trt & pathway == p)$ESup)
+            aPval <- c(aPval,subset(multi3SppGSEA, species == aSpp & sex == aSex & trt == Trt & pathway == p)$pvalUpAdj)
+          } else {
+            aES <- c(aES,subset(multi3SppGSEA, species == aSpp & sex == aSex & trt == Trt & pathway == p)$ESdown)
+            aPval <- c(aPval,subset(multi3SppGSEA, species == aSpp & sex == aSex & trt == Trt & pathway == p)$pvalDnAdj)
+          }
+          
+          #get more sig data from B
+          bUp <- ifelse(subset(multi3SppGSEA, species == bSpp & sex == bSex & trt == Trt & pathway == p)$pvalUpAdj <
+                          subset(multi3SppGSEA, species == bSpp & sex == bSex & trt == Trt & pathway == p)$pvalDnAdj,
+                        TRUE, FALSE)
+          if (bUp) {
+            bES <- c(bES,subset(multi3SppGSEA, species == bSpp & sex == bSex & trt == Trt & pathway == p)$ESup)
+            bPval <- c(bPval,subset(multi3SppGSEA, species == bSpp & sex == bSex & trt == Trt & pathway == p)$pvalUpAdj)
+          } else {
+            bES <- c(bES,subset(multi3SppGSEA, species == bSpp & sex == bSex & trt == Trt & pathway == p)$ESdown)
+            bPval <- c(bPval,subset(multi3SppGSEA, species == bSpp & sex == bSex & trt == Trt & pathway == p)$pvalDnAdj)
+          }
+
+          
+        }
+        
+        gseaComp <- cbind.data.frame(sigPaths,aES,aPval,bES,bPval)
+        gseaComp$sigSpp <- ifelse(gseaComp$aPval < .05 & gseaComp$bPval < .05, "both",
+                                  ifelse(gseaComp$aPval < .05, paste0("sig",sppA), paste0("sig",sppB)))
+        
+        ggplot(gseaComp,
+               aes(x = aES, 
+                   y = bES,
+                   col = sigSpp,
+                   shape = sigPaths %in% immunePathways)) +
+          geom_hline(yintercept = 0) +
+          geom_vline(xintercept = 0) +
+          geom_point(size = 3) +
+          theme_bw() +
+          labs(col = "p < 0.05",
+               shape = "Immmune\nPathway") +
+          xlab(paste0(sppA," ",Trt,"-LPS")) +
+          ylab(paste0(sppB," ",Trt,"-LPS")) +
+          ggtitle(paste0(Trt," Pathway ES - ",sppB," v. ",sppA))
+        ggsave(paste0(figPaperDir,"GSEA/",Trt,"_",sppB,"v",sppA,".png"),
+               height = 4, width = 6)
+      }
+    }
+  }
+}
+
+
+### bar plot \ immune paths
+multi3SppGSEAImmuneHist <- subset(multi3SppGSEA, pathway %in% immunePathways)
+
+multi3SppGSEAImmuneHist$shortName <- factor(multi3SppGSEAImmuneHist$shortName, levels = c("meerkatBetasFLPS_plusTrt" ,"meerkatBetasFLPS_minusTrt",
+                                                                                          "BaboonMale_plusTrt","BaboonMale_minusTrt",
+                                                                                          "BaboonFemale_plusTrt","BaboonFemale_minusTrt",
+                                                                                          "SGE1_plusTrt","SGE1_minusTrt"))
+
+multi3SppGSEAImmuneHist$plotES <- ifelse(multi3SppGSEAImmuneHist$pvalUpAdj > .05 & multi3SppGSEAImmuneHist$pvalDnAdj > .05, 0,
+                                         ifelse(multi3SppGSEAImmuneHist$pvalUpAdj < multi3SppGSEAImmuneHist$pvalDnAdj,
+                                                multi3SppGSEAImmuneHist$ESup, multi3SppGSEAImmuneHist$ESdown))
+
+ggplot(subset(multi3SppGSEAImmuneHist, trt == "plus"),
+       aes(y = plotES,
+           x = shortName,
+           col = shortName)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linewidth = 2, col = "gray30") +
+  facet_grid(cols = vars(str_replace_all(string = pathway, pattern = "_", replacement = "\n"))) +
+  theme_bw() + theme(axis.text.x = element_blank())
+  
+ggsave(paste0(figPaperDir,"GSEA/plusLPS_ImmunePaths_dotplot.png"), height = 4, width = 6)
+
+ggplot(subset(multi3SppGSEAImmuneHist, trt == "minus"),
+       aes(y = plotES,
+           x = shortName,
+           col = shortName)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linewidth = 2, col = "gray30") +
+  facet_grid(cols = vars(str_replace_all(string = pathway, pattern = "_", replacement = "\n"))) +
+  theme_bw() + theme(axis.text.x = element_blank())
+  
+ggsave(paste0(figPaperDir,"GSEA/minusLPS_ImmunePaths_dotplot.png"), height = 4, width = 6)
+
+
+### bar plot \ all pathways
+
+multi3SppGSEA$plotES <- ifelse(multi3SppGSEA$pvalUpAdj > .05 & multi3SppGSEA$pvalDnAdj > .05, 0,
+                                         ifelse(multi3SppGSEA$pvalUpAdj < multi3SppGSEA$pvalDnAdj,
+                                                multi3SppGSEA$ESup, multi3SppGSEA$ESdown))
+
+multi3SppGSEA$plotPval <- ifelse(multi3SppGSEA$pvalUpAdj < .05, multi3SppGSEA$pvalUpAdj,
+                                 ifelse(multi3SppGSEA$pvalDnAdj < .05, multi3SppGSEA$pvalDnAdj, 1))
+
+multi3SppGSEA$plotPval <- ifelse(multi3SppGSEA$plotPval == 0, .00001 * 27, multi3SppGSEA$plotPval)
+
+multi3SppGSEA$shortName <- factor(multi3SppGSEA$shortName, levels = c("meerkatBetasFLPS_plusTrt" ,"meerkatBetasFLPS_minusTrt",
+                                                                      "BaboonMale_plusTrt","BaboonMale_minusTrt",
+                                                                      "BaboonFemale_plusTrt","BaboonFemale_minusTrt",
+                                                                      "SGE1_plusTrt","SGE1_minusTrt"))
+
+#which pathways have a sig hit
+sigPathwaysMinus <- vector()
+sigPathwaysPlus <- vector()
+
+for (p in unique(multi3SppGSEA$pathway)) {
+  minPathPplus <- min(c(subset(multi3SppGSEA, pathway == p & species == "Meerkat" & trt == "plus")$pvalUpAdj,
+                        subset(multi3SppGSEA, pathway == p & species == "Meerkat" & trt == "plus")$pvalDnAdj))
+  minPathPminus <- min(c(subset(multi3SppGSEA, pathway == p & species == "Meerkat" & trt == "minus")$pvalUpAdj,
+                        subset(multi3SppGSEA, pathway == p & species == "Meerkat" & trt == "minus")$pvalDnAdj))
+  if (minPathPplus < .05) {
+    sigPathwaysPlus <- c(sigPathwaysPlus,p)
+  }
+  if (minPathPminus < .05) {
+    sigPathwaysMinus <- c(sigPathwaysMinus,p)
+  }
+}
+
+multi3SppGSEAplus <- subset(multi3SppGSEA, pathway %in% sigPathwaysPlus)
+multi3SppGSEAminus <- subset(multi3SppGSEA, pathway %in% sigPathwaysMinus)
+
+
+ggplot(subset(multi3SppGSEAplus, trt == "plus"),
+       aes(y = plotES,
+           x = shortName,
+           col = shortName)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linewidth = 2, col = "gray30") +
+  facet_grid(cols = vars(str_replace_all(string = pathway, pattern = "_", replacement = "\n"))) +
+  theme_bw() + theme(axis.text.x = element_blank())
+  
+ggsave(paste0(figPaperDir,"GSEA/plusLPS_allSigPaths_dotplot_v2.png"), height = 4, width = 10)
+
+ggplot(subset(multi3SppGSEAminus, trt == "minus"),
+       aes(y = plotES,
+           x = shortName,
+           col = shortName)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linewidth = 2, col = "gray30") +
+  facet_grid(cols = vars(str_replace_all(string = pathway, pattern = "_", replacement = "\n"))) +
+  theme_bw() + theme(axis.text.x = element_blank())
+  
+ggsave(paste0(figPaperDir,"GSEA/minusLPS_allSigPaths_dotplot_v2.png"), height = 4, width = 6)
+
+
+#compare betas - meerkat to baboon male
+baboonMbetas <- read.csv2(paste0("~/Dropbox (Personal)/socialSignal/data/","male_baboon_all_emmreml_betas.csv"),sep = ",", dec = ".")
+colnames(baboonMbetas)[1] <- "GeneID"
+
+### FLIPPING ALL RANK BETAS ###
+### RANK BETA IS NOW w.r.t. -rank ###
+### SO RANK AGREES WITH MACAQUE Elo ###
+
+baboonMbetas$MalerankbetaLPSminus <- -baboonMbetas$MalerankbetaLPSminus
+baboonMbetas$MalerankbetaLPSplus <- -baboonMbetas$MalerankbetaLPSplus
+
+rownames(baboonMbetas) <- baboonMbetas$GeneID
+
+negVarGenes <- unique(c(rownames(baboonMbetas[which(baboonMbetas$MalerankvarbetaLPSplus < 0),]),
+                        rownames(baboonMbetas[which(baboonMbetas$MalerankvarbetaLPSminus < 0),])))
+
+baboonMbetas <- baboonMbetas[!rownames(baboonMbetas) %in% negVarGenes,]
+
+baboonMbetas$stdBetaMalerankLPSminus <- baboonMbetas$MalerankbetaLPSminus / sqrt(baboonMbetas$MalerankvarbetaLPSminus)
+baboonMbetas$stdBetaMalerankLPSplus <- baboonMbetas$MalerankbetaLPSplus / sqrt(baboonMbetas$MalerankvarbetaLPSplus)
+
+
+
+## LPS
+mrktBetas <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+mrktBetas$stdBeta_status <- mrktBetas$beta_status / sqrt(mrktBetas$var_beta_status)
+mrktBetas$GeneID <- rownames(mrktBetas)
+primBetas <- baboonMbetas
+
+compBetas <- merge(mrktBetas,primBetas,by = "GeneID", suffixes = c(".mrkt",".prim"))
+
+ggplot(data = compBetas, 
+       aes(x = stdBeta_status,
+           y = stdBetaMalerankLPSplus)) +
+  geom_point() + 
+  geom_smooth(method = "lm", formula = "y~x")
+
+#for each immune pathway
+p <- "HALLMARK_INFLAMMATORY_RESPONSE"
+for (p in immunePathways) {
+  pathwayGenes <- unique(subset(gene.set, GO.Term.Accession == p)$Associated.Gene.Name)
+  compBetaPath <- subset(compBetas, GeneID %in% pathwayGenes)
+  
+  plotR <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaMalerankLPSplus)$estimate, digits = 3)
+  plotP <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaMalerankLPSplus)$p.value, digits = 3)
+  
+  ggplot(data = compBetaPath, 
+         aes(y = stdBetaMalerankLPSplus,
+             x = stdBeta_status)) +
+    geom_point(size = pointSize) +
+    geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+    geom_smooth(method = "lm", formula = "y~x") +
+    theme_bw() +
+    theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+    ggtitle(p, subtitle = paste0("R = ",plotR," | p = ",plotP)) +
+    ylab(paste0("Stardized Effect Size:\nStatus in Male Baboons")) +
+    xlab(paste0("Stardized Effect Size:\nStatus in Female Meerkats"))
+  ggsave(paste0(figPaperDir,"GSEA/betas_LPS_MBab_v_Mrkt_",p,"_XYplot.png"), height = 4, width = 4)
+  
+  ## add "sign in either?"
+  
+  compBetaPath$SigInEither <- compBetaPath$fdr_status < .1 | compBetaPath$MalerankqvalueLPSplus < .1
+  
+  plotRsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                             compBetaPath$stdBetaMalerankLPSplus[compBetaPath$SigInEither])$estimate, digits = 3)
+  plotPsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                             compBetaPath$stdBetaMalerankLPSplus[compBetaPath$SigInEither])$p.value, digits = 3)
+
+  
+  
+  ggplot(data = compBetaPath, 
+         aes(y = stdBetaMalerankLPSplus,
+             x = stdBeta_status,
+             col = SigInEither)) +
+    geom_point() +
+    geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+    geom_smooth(method = "lm", formula = "y~x") +
+    theme_bw() +
+    ggtitle(p,
+            subtitle = paste0("Sig in Either: R = ",plotRsig," | p = ",plotPsig)) +
+    ylab(paste0("Std Beta Rank Male Baboon LPS")) +
+    xlab(paste0("Std Beta Status Female Meerkat LPS"))
+    ggsave(paste0(figPaperDir,"GSEA/betas_LPS_MBab_v_Mrkt_",p,"_XYplot_wSig.png"), height = 4, width = 6)
+}
+
+
+
+## Ctrl
+mrktBetas <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+mrktBetas$stdBeta_status <- mrktBetas$beta_status / sqrt(mrktBetas$var_beta_status)
+mrktBetas$GeneID <- rownames(mrktBetas)
+primBetas <- baboonMbetas
+
+compBetas <- merge(mrktBetas,primBetas,by = "GeneID", suffixes = c(".mrkt",".prim"))
+
+ggplot(data = compBetas, 
+       aes(x = stdBeta_status,
+           y = stdBetaMalerankLPSplus)) +
+  geom_point() + 
+  geom_smooth(method = "lm", formula = "y~x")
+
+#for each immune pathway
+#p <- "HALLMARK_TNFA_SIGNALING_VIA_NFKB"
+for (p in immunePathways) {
+  pathwayGenes <- unique(subset(gene.set, GO.Term.Accession == p)$Associated.Gene.Name)
+  compBetaPath <- subset(compBetas, GeneID %in% pathwayGenes)
+  
+  plotR <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaMalerankLPSminus)$estimate, digits = 3)
+  plotP <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaMalerankLPSminus)$p.value, digits = 3)
+  
+  ggplot(data = compBetaPath, 
+         aes(y = stdBetaMalerankLPSminus,
+             x = stdBeta_status)) +
+    geom_point() +
+    geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+    geom_smooth(method = "lm", formula = "y~x") +
+    theme_bw() +
+    ggtitle(p,
+            subtitle = paste0("R = ",plotR," | p = ",plotP)) +
+    ylab(paste0("Std Beta Rank Male Baboon Ctrl")) +
+    xlab(paste0("Std Beta Status Female Meerkat Ctrl"))
+  ggsave(paste0(figPaperDir,"GSEA/betas_Ctrl_MBab_v_Mrkt_",p,"_XYplot.png"), height = 4, width = 6)
+  
+  if (any(sum(compBetaPath$fdr_status < .1 | compBetaPath$MalerankqvalueLPSminus < .1))) {
+    compBetaPath$SigInEither <- compBetaPath$fdr_status < .1 | compBetaPath$MalerankqvalueLPSminus < .1
+    
+    plotRsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                               compBetaPath$stdBetaMalerankLPSminus[compBetaPath$SigInEither])$estimate, digits = 3)
+    plotPsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                               compBetaPath$stdBetaMalerankLPSminus[compBetaPath$SigInEither])$p.value, digits = 3)
+  
+    ggplot(data = compBetaPath, 
+           aes(y = stdBetaMalerankLPSminus,
+               x = stdBeta_status,
+               col = SigInEither)) +
+      geom_point() +
+      geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+      geom_smooth(method = "lm", formula = "y~x") +
+      theme_bw() +
+      ggtitle(p,
+              subtitle = paste0("Sig in Either: R = ",plotRsig," | p = ",plotPsig)) +
+      ylab(paste0("Std Beta Rank Male Baboon Ctrl")) +
+      xlab(paste0("Std Beta Status Female Meerkat Ctrl"))
+      ggsave(paste0(figPaperDir,"GSEA/betas_Ctrl_MBab_v_Mrkt_",p,"_XYplot_wSig.png"), height = 4, width = 6)
+  }
+}
+
+
+
+#compare betas - meerkat to baboon female
+baboonFbetas <- read.csv2(paste0("~/Dropbox (Personal)/socialSignal/data/","female_baboon_all_emmreml_betas.csv"),sep = ",", dec = ".")
+colnames(baboonFbetas)[1] <- "GeneID"
+
+### FLIPPING ALL RANK BETAS ###
+### RANK BETA IS NOW w.r.t. -rank ###
+### SO RANK AGREES WITH MACAQUE Elo ###
+
+baboonFbetas$FemalerankbetaLPSminus <- -baboonFbetas$FemalerankbetaLPSminus
+baboonFbetas$FemalerankbetaLPSplus <- -baboonFbetas$FemalerankbetaLPSplus
+baboonFbetas$FemaleDSIbetaLPSminus <- -baboonFbetas$FemaleDSIbetaLPSminus
+baboonFbetas$FemaleDSIbetaLPSplus <- -baboonFbetas$FemaleDSIbetaLPSplus
+
+rownames(baboonFbetas) <- baboonFbetas$GeneID
+
+baboonFbetas$stdBetaFemalerankLPSminus <- baboonFbetas$FemalerankbetaLPSminus / sqrt(baboonFbetas$FemalerankvarbetaLPSminus)
+baboonFbetas$stdBetaFemalerankLPSplus <- baboonFbetas$FemalerankbetaLPSplus / sqrt(baboonFbetas$FemalerankvarbetaLPSplus)
+
+baboonFbetas$stdBetaFemaleDSILPSminus <- baboonFbetas$FemaleDSIbetaLPSminus / sqrt(baboonFbetas$FemaleDSIvarbetaLPSminus)
+baboonFbetas$stdBetaFemaleDSILPSplus <- baboonFbetas$FemaleDSIbetaLPSplus / sqrt(baboonFbetas$FemaleDSIvarbetaLPSplus)
+
+## LPS
+mrktBetas <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+mrktBetas$stdBeta_status <- mrktBetas$beta_status / sqrt(mrktBetas$var_beta_status)
+mrktBetas$GeneID <- rownames(mrktBetas)
+primBetas <- baboonFbetas
+
+compBetas <- merge(mrktBetas,primBetas,by = "GeneID", suffixes = c(".mrkt",".prim"))
+
+ggplot(data = compBetas, 
+       aes(x = stdBeta_status,
+           y = stdBetaFemalerankLPSplus)) +
+  geom_point() + 
+  geom_smooth(method = "lm", formula = "y~x")
+
+#for each immune pathway
+#p <- "HALLMARK_TNFA_SIGNALING_VIA_NFKB"
+for (p in immunePathways) {
+  pathwayGenes <- unique(subset(gene.set, GO.Term.Accession == p)$Associated.Gene.Name)
+  compBetaPath <- subset(compBetas, GeneID %in% pathwayGenes)
+  
+  plotR <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaFemalerankLPSplus)$estimate, digits = 3)
+  plotP <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaFemalerankLPSplus)$p.value, digits = 3)
+  
+  ggplot(data = compBetaPath, 
+         aes(y = stdBetaFemalerankLPSplus,
+             x = stdBeta_status)) +
+    geom_point() +
+    geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+    geom_smooth(method = "lm", formula = "y~x") +
+    theme_bw() +
+    ggtitle(p,
+            subtitle = paste0("R = ",plotR," | p = ",plotP)) +
+    ylab(paste0("Std Beta Rank Female Baboon LPS")) +
+    xlab(paste0("Std Beta Status Female Meerkat LPS"))
+  ggsave(paste0(figPaperDir,"GSEA/betas_LPS_FBab_v_Mrkt_",p,"_XYplot.png"), height = 4, width = 6)
+  
+  if (sum(compBetaPath$fdr_status < .1 | compBetaPath$FemalerankqvalueLPSplus < .1) > 2) {
+    compBetaPath$SigInEither <- compBetaPath$fdr_status < .1 | compBetaPath$FemalerankqvalueLPSplus < .1
+    
+    plotRsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                               compBetaPath$stdBetaFemalerankLPSplus[compBetaPath$SigInEither])$estimate, digits = 3)
+    plotPsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                               compBetaPath$stdBetaFemalerankLPSplus[compBetaPath$SigInEither])$p.value, digits = 3)
+  
+    ggplot(data = compBetaPath, 
+           aes(y = stdBetaFemalerankLPSplus,
+               x = stdBeta_status,
+               col = SigInEither)) +
+      geom_point() +
+      geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+      geom_smooth(method = "lm", formula = "y~x") +
+      theme_bw() +
+      ggtitle(p,
+              subtitle = paste0("Sig in Either: R = ",plotRsig," | p = ",plotPsig)) +
+      ylab(paste0("Std Beta Rank Female Baboon LPS")) +
+      xlab(paste0("Std Beta Status Female Meerkat LPS"))
+      ggsave(paste0(figPaperDir,"GSEA/betas_LPS_FBab_v_Mrkt_",p,"_XYplot_wSig.png"), height = 4, width = 6)
+  }
+}
+  
+## Ctrl
+mrktBetas <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+mrktBetas$stdBeta_status <- mrktBetas$beta_status / sqrt(mrktBetas$var_beta_status)
+mrktBetas$GeneID <- rownames(mrktBetas)
+primBetas <- baboonFbetas
+
+compBetas <- merge(mrktBetas,primBetas,by = "GeneID", suffixes = c(".mrkt",".prim"))
+
+ggplot(data = compBetas, 
+       aes(x = stdBeta_status,
+           y = stdBetaFemalerankLPSminus)) +
+  geom_point() + 
+  geom_smooth(method = "lm", formula = "y~x")
+
+#for each immune pathway
+p <- "HALLMARK_COMPLEMENT"
+for (p in immunePathways) {
+  pathwayGenes <- unique(subset(gene.set, GO.Term.Accession == p)$Associated.Gene.Name)
+  compBetaPath <- subset(compBetas, GeneID %in% pathwayGenes)
+  
+  plotR <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaFemalerankLPSminus)$estimate, digits = 3)
+  plotP <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaFemalerankLPSminus)$p.value, digits = 3)
+  
+  ggplot(data = compBetaPath, 
+         aes(y = stdBetaFemalerankLPSminus,
+             x = stdBeta_status)) +
+    geom_point(size = pointSize) +
+    geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+    geom_smooth(method = "lm", formula = "y~x") +
+    theme_bw() +
+    theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+    ggtitle(p, subtitle = paste0("R = ",plotR," | p = ",plotP)) +
+    ylab(paste0("Stardized Effect Size:\nStatus in Female Baboons")) +
+    xlab(paste0("Stardized Effect Size:\nStatus in Female Meerkats"))
+  ggsave(paste0(figPaperDir,"GSEA/betas_Ctrl_FBab_v_Mrkt_",p,"_XYplot.png"), height = 4, width = 4)
+  
+  if (sum(compBetaPath$fdr_status < .1 | compBetaPath$FemalerankqvalueLPSminus < .1) > 2) {
+    compBetaPath$SigInEither <- compBetaPath$fdr_status < .1 | compBetaPath$FemalerankqvalueLPSminus < .1
+    
+    plotRsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                               compBetaPath$stdBetaFemalerankLPSminus[compBetaPath$SigInEither])$estimate, digits = 3)
+    plotPsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                               compBetaPath$stdBetaFemalerankLPSminus[compBetaPath$SigInEither])$p.value, digits = 3)
+  
+    ggplot(data = compBetaPath, 
+           aes(y = stdBetaFemalerankLPSminus,
+               x = stdBeta_status,
+               col = SigInEither)) +
+      geom_point() +
+      geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+      geom_smooth(method = "lm", formula = "y~x") +
+      theme_bw() +
+      ggtitle(p,
+              subtitle = paste0("Sig in Either: R = ",plotRsig," | p = ",plotPsig)) +
+      ylab(paste0("Std Beta Rank Female Baboon Ctrl")) +
+      xlab(paste0("Std Beta Status Female Meerkat Ctrl"))
+      ggsave(paste0(figPaperDir,"GSEA/betas_Ctrl_FBab_v_Mrkt_",p,"_XYplot_wSig.png"), height = 4, width = 6)
+  }
+}
+
+
+#compare betas - meerkat to macaque female
+macaqueFbetas <- read.csv2(paste0("~/Dropbox (Personal)/socialSignal/data/","sge1_macaque_rankLPSall_emmreml_betas.csv"),sep = ",", dec = ".")
+colnames(macaqueFbetas)[1] <- "GeneID"
+
+
+rownames(macaqueFbetas) <- macaqueFbetas$GeneID
+
+macaqueFbetas$stdBetaRankLPSminus <- macaqueFbetas$betaRankLPSminus / sqrt(macaqueFbetas$varBetaRankLPSminus)
+macaqueFbetas$stdBetaRankLPSplus <- macaqueFbetas$betaRankLPSplus / sqrt(macaqueFbetas$varBetaRankLPSplus)
+
+
+## LPS
+mrktBetas <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+mrktBetas$stdBeta_status <- mrktBetas$beta_status / sqrt(mrktBetas$var_beta_status)
+mrktBetas$GeneID <- rownames(mrktBetas)
+primBetas <- macaqueFbetas
+
+compBetas <- merge(mrktBetas,primBetas,by = "GeneID", suffixes = c(".mrkt",".prim"))
+
+ggplot(data = compBetas, 
+       aes(x = stdBeta_status,
+           y = stdBetaRankLPSplus)) +
+  geom_point() + 
+  geom_smooth(method = "lm", formula = "y~x")
+
+#for each immune pathway
+#p <- "HALLMARK_TNFA_SIGNALING_VIA_NFKB"
+for (p in immunePathways) {
+  pathwayGenes <- unique(subset(gene.set, GO.Term.Accession == p)$Associated.Gene.Name)
+  compBetaPath <- subset(compBetas, GeneID %in% pathwayGenes)
+  
+  plotR <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaRankLPSplus)$estimate, digits = 3)
+  plotP <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaRankLPSplus)$p.value, digits = 3)
+  
+  ggplot(data = compBetaPath, 
+         aes(x = stdBetaRankLPSplus,
+             y = stdBeta_status)) +
+    geom_point() +
+    geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+    geom_smooth(method = "lm", formula = "y~x") +
+    theme_bw() +
+    ggtitle(p,
+            subtitle = paste0("R = ",plotR," | p = ",plotP)) +
+    xlab(paste0("Std Beta Rank Female Macaque LPS")) +
+    ylab(paste0("Std Beta Status Female Meerkat LPS"))
+  ggsave(paste0(figPaperDir,"GSEA/betas_LPS_Mrkt_v_FMacaque_",p,"_XYplot.png"), height = 4, width = 6)
+  
+  if (sum(compBetaPath$fdr_status < .1 | compBetaPath$fdrRankLPSplus < .1) > 2) {
+    compBetaPath$SigInEither <- compBetaPath$fdr_status < .1 | compBetaPath$fdrRankLPSplus < .1
+    
+    plotRsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                               compBetaPath$stdBetaRankLPSplus[compBetaPath$SigInEither])$estimate, digits = 3)
+    plotPsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                               compBetaPath$stdBetaRankLPSplus[compBetaPath$SigInEither])$p.value, digits = 3)
+  
+    ggplot(data = compBetaPath, 
+           aes(x = stdBetaRankLPSplus,
+               y = stdBeta_status,
+               col = SigInEither)) +
+      geom_point() +
+      geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+      geom_smooth(method = "lm", formula = "y~x") +
+      theme_bw() +
+      ggtitle(p,
+              subtitle = paste0("Sig in Either: R = ",plotRsig," | p = ",plotPsig)) +
+      xlab(paste0("Std Beta Rank Female Macaque LPS")) +
+      ylab(paste0("Std Beta Status Female Meerkat LPS"))
+      ggsave(paste0(figPaperDir,"GSEA/betas_LPS_Mrkt_v_FMacaque_",p,"_XYplot_wSig.png"), height = 4, width = 6)
+  }
+}
+  
+## Ctrl
+mrktBetas <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+mrktBetas$stdBeta_status <- mrktBetas$beta_status / sqrt(mrktBetas$var_beta_status)
+mrktBetas$GeneID <- rownames(mrktBetas)
+primBetas <- macaqueFbetas
+
+compBetas <- merge(mrktBetas,primBetas,by = "GeneID", suffixes = c(".mrkt",".prim"))
+
+ggplot(data = compBetas, 
+       aes(x = stdBeta_status,
+           y = stdBetaRankLPSminus)) +
+  geom_point() + 
+  geom_smooth(method = "lm", formula = "y~x")
+
+#for each immune pathway
+p <- "HALLMARK_COMPLEMENT"
+for (p in immunePathways) {
+  pathwayGenes <- unique(subset(gene.set, GO.Term.Accession == p)$Associated.Gene.Name)
+  compBetaPath <- subset(compBetas, GeneID %in% pathwayGenes)
+  
+  plotR <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaRankLPSminus)$estimate, digits = 3)
+  plotP <- signif(cor.test(compBetaPath$stdBeta_status, compBetaPath$stdBetaRankLPSminus)$p.value, digits = 3)
+  
+  ggplot(data = compBetaPath, 
+         aes(x = stdBetaRankLPSminus,
+             y = stdBeta_status)) +
+    geom_point() +
+    geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+    geom_smooth(method = "lm", formula = "y~x") +
+    theme_bw() +
+    ggtitle(p,
+            subtitle = paste0("R = ",plotR," | p = ",plotP)) +
+    xlab(paste0("Std Beta Rank Female Macaque Ctrl")) +
+    ylab(paste0("Std Beta Status Female Meerkat Ctrl"))
+  ggsave(paste0(figPaperDir,"GSEA/betas_Ctrl_Mrkt_v_FMacaque_",p,"_XYplot.png"), height = 4, width = 6)
+  
+  if (sum(compBetaPath$fdr_status < .1 | compBetaPath$fdrRankLPSminus < .1) > 2) {
+    compBetaPath$SigInEither <- compBetaPath$fdr_status < .1 | compBetaPath$fdrRankLPSminus < .1
+    
+    plotRsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                               compBetaPath$stdBetaRankLPSminus[compBetaPath$SigInEither])$estimate, digits = 3)
+    plotPsig <- signif(cor.test(compBetaPath$stdBeta_status[compBetaPath$SigInEither], 
+                               compBetaPath$stdBetaRankLPSminus[compBetaPath$SigInEither])$p.value, digits = 3)
+  
+    ggplot(data = compBetaPath, 
+           aes(x = stdBetaRankLPSminus,
+               y = stdBeta_status,
+               col = SigInEither)) +
+      geom_point() +
+      geom_vline(xintercept = 0) + geom_hline(yintercept = 0) +
+      geom_smooth(method = "lm", formula = "y~x") +
+      theme_bw() +
+      ggtitle(p,
+              subtitle = paste0("Sig in Either: R = ",plotRsig," | p = ",plotPsig)) +
+      xlab(paste0("Std Beta Rank Female Macaque Ctrl")) +
+      ylab(paste0("Std Beta Status Female Meerkat Ctrl"))
+      ggsave(paste0(figPaperDir,"GSEA/betas_Ctrl_Mrkt_v_FMacaque_",p,"_XYplot_wSig.png"), height = 4, width = 6)
+  }
+}
+
+
+
+
+
+xmasPlot <- subset(multi3SppGSEA, pvalUpAdj < .05 | pvalDnAdj < .05)
+xmasPlot <- subset(xmasPlot, pathway %in% immunePathways)
+
+xmasPlot$shortName <- factor(xmasPlot$shortName, levels = c("SGE1_minusTrt","SGE1_plusTrt",
+                                                            "BaboonFemale_minusTrt","BaboonFemale_plusTrt",
+                                                            "BaboonMale_minusTrt","BaboonMale_plusTrt",
+                                                            "meerkatBetasFLPS_minusTrt","meerkatBetasFLPS_plusTrt"))
+
+xmasPlot$pathway <- factor(xmasPlot$pathway, levels = c("HALLMARK_INTERFERON_ALPHA_RESPONSE",
+                                                        "HALLMARK_INTERFERON_GAMMA_RESPONSE",
+                                                        "HALLMARK_COMPLEMENT",
+                                                        "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+                                                        "HALLMARK_INFLAMMATORY_RESPONSE",
+                                                        "HALLMARK_CTRA_UP",
+                                                        "HALLMARK_CTRA_DOWN"))
+
+
+#christmas tree plot
+ggplot(data = xmasPlot, aes(x = shortName, y = pathway, col = plotES, size = -log10(plotPval))) +
+  geom_point() + 
+  #scale_color_viridis(limits = c(-1,1)) + 
+  scale_color_gradientn(limits = c(-1,1),
+                        colors = c(lowES,"grey80",highES)) +
+  ggtitle("status - emreml - sig GSEA pathways") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  labs(size = "-log10(adjP-Value)", col = "ES") +
+   theme(legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.key.height = unit(.5, 'cm'), #change legend key height
+        legend.key.width = unit(.5, 'cm'), #change legend key width
+        legend.title = element_text(size=8), #change legend title font size
+        legend.text = element_text(size=6))
+ggsave(paste0(figPaperDir,"GSEA/status_plot_emreml_paper_draft.png"), width = 8, height = 6)
+
+ggplot(data = subset(xmasPlot, pathway %in% c(c("HALLMARK_INTERFERON_GAMMA_RESPONSE",
+                                                "HALLMARK_COMPLEMENT",
+                                                "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+                                                "HALLMARK_INFLAMMATORY_RESPONSE",
+                                                "HALLMARK_CTRA_UP"))), aes(x = shortName, y = pathway, col = plotES, size = -log10(plotPval))) +
+  geom_point() + 
+  #scale_color_viridis(limits = c(-1,1)) + 
+  scale_color_gradientn(limits = c(-1,1),
+                        colors = c(lowES,"grey80",highES)) +
+  ggtitle("status - emreml - sig GSEA pathways") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  labs(size = "-log10(adjP-Value)", col = "ES") +
+   theme(legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.key.height = unit(.5, 'cm'), #change legend key height
+        legend.key.width = unit(.5, 'cm'), #change legend key width
+        legend.title = element_text(size=8), #change legend title font size
+        legend.text = element_text(size=6))
+ggsave(paste0(figPaperDir,"GSEA/status_plot_emreml_paper_mrktOnly.png"), width = 8, height = 6)
+
+ggplot(data = subset(xmasPlot, pathway %in% c(c("HALLMARK_INTERFERON_GAMMA_RESPONSE",
+                                                "HALLMARK_COMPLEMENT",
+                                                "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+                                                "HALLMARK_INFLAMMATORY_RESPONSE"))), aes(x = shortName, y = pathway, col = plotES, size = -log10(plotPval))) +
+  geom_point() + 
+  #scale_color_viridis(limits = c(-1,1)) + 
+  scale_color_gradientn(limits = c(-1,1),
+                        colors = c(lowES,"grey80",highES)) +
+  ggtitle("status - emreml - sig GSEA pathways") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  labs(size = "-log10(adjP-Value)", col = "ES") +
+   theme(legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.key.height = unit(.5, 'cm'), #change legend key height
+        legend.key.width = unit(.5, 'cm'), #change legend key width
+        legend.title = element_text(size=8), #change legend title font size
+        legend.text = element_text(size=6))
+ggsave(paste0(figPaperDir,"GSEA/status_plot_emreml_paper_mrktOnly_noCTRA.png"), width = 8, height = 6)
+
+ggplot(data = subset(xmasPlot, pathway %in% c(c("HALLMARK_INTERFERON_GAMMA_RESPONSE",
+                                                "HALLMARK_COMPLEMENT",
+                                                "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+                                                "HALLMARK_INFLAMMATORY_RESPONSE"))), aes(x = shortName, y = pathway, col = plotES, size = -log10(plotPval))) +
+  geom_point() + 
+  #scale_color_viridis(limits = c(-1,1)) + 
+  scale_color_gradientn(limits = c(-1,1),
+                        colors = c(lowES,"grey80",highES)) +
+  ggtitle("") +
+  theme_bw() +
+  theme(title = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank()) +
+  labs(size = "-log10(adjP-Value)", col = "ES") +
+   theme(legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.key.height = unit(.5, 'cm'), #change legend key height
+        legend.key.width = unit(.5, 'cm'), #change legend key width
+        legend.title = element_text(size=8), #change legend title font size
+        legend.text = element_text(size=6)); ggsave(paste0(figPaperDir,"GSEA/status_plot_emreml_poster.png"), width = 3.5, height = 2.5)
+
+```
+
+
+```{r Method Text}
+pcaLPS <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_MF_LPS_10000genes_5lCPM_modelF_dfMeta.RDS")
+
+LPSpc1r <- round(cor.test(as.numeric(pcaLPS$Trt != "Ctrl"), pcaLPS$PC1)$estimate, digits = 2)
+LPSpc1p <- cor.test(as.numeric(pcaLPS$Trt != "Ctrl"), pcaLPS$PC1)$p.value
+ggplot() +
+  geom_point(aes(y = pcaLPS$PC1,
+                 x = as.numeric(pcaLPS$Trt != "Ctrl")))
+
+
+pcaGard <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_MF_Gard_10000genes_5lCPM_modelG_dfMeta.RDS")
+Gardpc2r <- round(cor.test(as.numeric(pcaGard$Trt != "Ctrl"), pcaGard$PC2)$estimate, digits = 2)
+Gardpc2p <- cor.test(as.numeric(pcaGard$Trt != "Ctrl"), pcaGard$PC2)$p.value
+
+pcaDex <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_MF_Dex_10000genes_5lCPM_modelG_dfMeta.RDS")
+Dexpc1r <- round(cor.test(as.numeric(pcaDex$Trt != "Ctrl"), pcaDex$PC1)$estimate, digits = 2)
+Dexpc1p <- cor.test(as.numeric(pcaDex$Trt != "Ctrl"), pcaDex$PC1)$p.value
+Dexpc2r <- round(cor.test(as.numeric(pcaDex$Trt != "Ctrl"), pcaDex$PC2)$estimate, digits = 2)
+Dexpc2p <- cor.test(as.numeric(pcaDex$Trt != "Ctrl"), pcaDex$PC2)$p.value
+
+print(paste0("We observed a strong gene regulatory response to stimulation in our samples. For all three stimulants, baseline samples separate from stimulated samples along the first or second principal component of variation in overall gene expression levels (rPC1-treatment condition=",LPSpc1r,", p=",LPSpc1p," for LPS, n=4,433 genes with logCPM > 5; rPC2-treatment condition=",Gardpc2r,", p=",Gardpc2p,"  for Gard, n=1,740 genes; rPC1-treatment condition=",Dexpc1r,", p=",Dexpc1p," and rPC2-treatment condition=",Dexpc2r,", p=",Dexpc2p," for Dex, n=4,663 genes;"))
+
+
+
+
+fAllTrt <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_modelG_allTrtF+Preg+WeightwKmatrix_emmreml")
+mAllTrt <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_allTrt_10000genes_5lCPM_modelG_allTrtM+WeightwKmatrix_emmreml")
+
+fAllTrt$gene <- rownames(fAllTrt); mAllTrt$gene <- rownames(mAllTrt)
+
+allAllTrt <- merge(fAllTrt, mAllTrt, by = "gene", suffixes = c(".f",".m"))
+
+allStatR <- cor.test(allAllTrt$beta_status.f, allAllTrt$beta_status.m)$estimate
+allStatP <- cor.test(allAllTrt$beta_status.f, allAllTrt$beta_status.m)$p.value
+
+print(paste0("Further, estimates in males versus females are not well-correlated (Pearson’s R=",allStatR,
+             ", p=",allStatP,", Supplementary Figure x)."))
+
+```
+
+```{r Results Text}
+allMetaF <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_metadata.RDS")
+allMetaM <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_allTrt_10000genes_5lCPM_metadata.RDS")
+
+allMeta <- rbind.data.frame(allMetaF,allMetaM)
+
+print(paste0("RNA-sequencing in peripheral blood mononuclear cells (PBMCs) from ",
+             length(unique(allMeta$correctsampleID))," individually recognized meerkats in the Kalahari study population (",
+             length(unique(subset(allMeta, sex.long == "F")$correctsampleID))," females and ",
+             length(unique(subset(allMeta, sex.long == "M")$correctsampleID))," males sampled from ",
+             length(unique(allMeta$group))," social groups"))
+
+captureMeta <- unique(cbind.data.frame(allMeta$captureref,allMeta$correctsampleID,allMeta$status_dom_sub.long,allMeta$sex,allMeta$avgWeight60d,allMeta$ageAtSample))
+colnames(captureMeta) <- c("captureref","correctsampleID","status","sex","weight","age")
+
+print(paste0("This data set combines samples from ",
+             length(unique(subset(captureMeta, status == "D")$captureref))," animals who were dominant at the time of capture (",
+             length(unique(subset(captureMeta, status == "D" & sex == "F")$captureref))," females and ",
+             length(unique(subset(captureMeta, status == "D" & sex == "M")$captureref))," males) and ",
+             length(unique(subset(captureMeta, status == "S")$captureref))," who were subordinate at the time of capture. ",
+             sum(table(captureMeta$correctsampleID) > 1)," individuals were sampled repeatedly, ",
+             length(unique(subset(allMeta, rationale == "newDom")$correctsampleID))," of whom are represented in our data set as both subordinates and dominants (i.e., were sampled across a dominance transition)."))
+
+### age and weight avg and sd
+captureMetaF <- subset(captureMeta, sex == "F")
+
+paste0("Dominant females, including those in this study, tend to be heavier (dominant mean = ",
+       mean(subset(captureMetaF,status == "D")$weight)," g, sd = ",sd(subset(captureMetaF,status == "D")$weight),
+       "; subordinate mean = ",mean(subset(captureMetaF,status == "S")$weight)," g, sd = ",sd(subset(captureMetaF,status == "S")$weight),
+       ") and older (dominant mean = ",mean(subset(captureMetaF,status == "D")$age)," yrs, sd = ",sd(subset(captureMetaF,status == "D")$age),
+       "; subordinate mean = ",mean(subset(captureMetaF,status == "S")$age)," yrs, sd = ",sd(subset(captureMetaF,status == "S")$age),
+       ", Clutton-Brock 2006, Kutsukake 2005) (Figure Sxxx).")
+
+```
+
+```{r }
+totGenes <- 760
+dirConsistent <- 715
+
+
+print(paste0("For the ",totGenes,
+             " gene-condition combinations we identified in the cross-sectional analysis (FDR < 10%; 735 unique genes, as 25 genes were dominance-associated in multiple conditions), ",
+             dirConsistent," (",round(100 *dirConsistent / totGenes,digits = 0),
+             "%) exhibited directionally consistent changes in mean expression levels across the dominance transition, (Figure X, p = ",bTest$p.value,")"))
+
+```
+
+
+```{r}
+print(paste0("Sex differences are unlikely to result from differences in power, as our sample size for males (n=",
+             length(unique(subset(allMeta, sex.long == "M")$correctsampleID))," unique males; n=",dim(subset(allMeta, sex.long == "M"))[1],
+             " samples) exceeded our sample size for females (n=",
+             length(unique(subset(allMeta, sex.long == "F")$correctsampleID))," unique females; n=",
+             dim(subset(allMeta, sex.long == "F"))[1]," samples)."))
+```
+
+```{r}
+pregSub <- length(unique(subset(allMetaF, pregStatusBackDate & status_dom_sub == "S")$captureref))
+
+pregDomCapt <- unique(subset(allMetaF, pregStatusBackDate & status_dom_sub == "D")$captureref)
+pregSubCapt <- unique(subset(allMetaF, pregStatusBackDate & status_dom_sub == "S")$captureref)
+
+
+unique(paste0(subset(allMetaF, captureref %in% pregDomCapt)$captureref,"_",subset(allMetaF, captureref %in% pregDomCapt)$pregResult))
+pregDomBorn <- 100*round(5/7, digits = 2)
+
+unique(paste0(subset(allMetaF, captureref %in% pregSubCapt)$captureref,"_",subset(allMetaF, captureref %in% pregSubCapt)$pregResult))
+pregSubBorn <- 100*round(1/7, digits = 2)
+
+
+print(paste0("They are also more likely to be sampled when pregnant, even though subordinate females sometimes ",
+             "conceive as well [cites]: in our sample, for example, ",pregSub,
+             " subordinate samples were collected in pregnant females, although only ",pregSubBorn,
+             "% of those pregnancies resulted in live offspring (compared to ",pregDomBorn,"% of pregnancies for dominant females)."))
+
+length(unique(subset(allMetaF, pregStatusBackDate)$captureref))
+
+length(unique(allMetaF$captureref))
+
+length(unique(allMetaF$correctsampleID))
+
+```
+
+actually not true, need to find the slide where I implied this...
+```{r}
+
+immuneGenes <- unique(c(subset(gene.set, Category == c("immune","signaling"))$Associated.Gene.Name,
+                        gene.set$Associated.Gene.Name[gene.set$GO.Term.Accession == "HALLMARK_TNFA_SIGNALING_VIA_NFKB"]))
+
+
+mrktFLPSbetas <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+mrktFLPStrt <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+
+lpsList <- rownames(mrktFLPSbetas)[mrktFLPSbetas$fdr_status < .1 & mrktFLPSbetas$beta_status > 0]
+trtList <- rownames(mrktFLPStrt)[mrktFLPStrt$fdr_treatment < .1]
+
+lpsTrtList <- intersect(lpsList,trtList)
+
+mean(mrktFLPStrt$beta_treatment[rownames(mrktFLPStrt) %in% lpsList] > 0)
+
+lpsImmuneList <- intersect(lpsList,immuneGenes)
+
+mean(mrktFLPStrt$beta_treatment[rownames(mrktFLPStrt) %in% lpsImmuneList] > 0)
+
+mrktFGardbetas <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gardonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+mrktFGardtrt <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gard_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml")
+
+
+mrktLPSresp <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/",
+                                 "allBatches_F_LPS_10000genes_5lCPM_modelF_basicResp+Preg+Weight_emmreml"))
+
+mrktGardresp <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/",
+                                 "allBatches_F_Gard_10000genes_5lCPM_modelG_basicResp+Preg+Weight_emmreml"))
+
+
+
+
+print("In support of this possibility, all genes that are more highly expressed in dominant individuals in the LPS or Gard condition are also upregulated upon stimulation with LPS or Gard, respectively (xxx).")
+```
+
+
+
+```{r}
+
+allMultiSppGSEA <- read.table("~/Dropbox (Personal)/socialSignal/output/gsea_multiSPP_GSEA_allResults.txt", sep = ",", header = T)
+
+
+
+print(paste0("Like high-ranking male baboons, high status female meerkats tend to upregulate genes in NFkB-mediated and interferon-mediated defense pathways (baboons: ",
+             "NFkB at LPS challenge p=",subset(allMultiSppGSEA, V1 == "HALLMARK_TNFA_SIGNALING_VIA_NFKB" & shortName == "BaboonMale_plusTrt")$pval_upreg,
+             " IFNg at baseline p=",subset(allMultiSppGSEA, V1 == "HALLMARK_INTERFERON_GAMMA_RESPONSE" & shortName == "BaboonMale_minusTrt")$pval_upreg,
+             " meerkats: NFkB p=",subset(allMultiSppGSEA, V1 == "HALLMARK_TNFA_SIGNALING_VIA_NFKB" & shortName == "meerkatBetasFLPS_plusTrt")$pval_upreg,
+             " IFNg at baseline p=",signif(subset(allMultiSppGSEA, V1 == "HALLMARK_INTERFERON_GAMMA_RESPONSE" & shortName == "meerkatBetasFLPS_minusTrt")$pval_upreg, digits = 3),
+             "), whereas the same pathways are downregulated in high-ranking female macaques (",
+             "NFkB at LPS challenge p=",subset(allMultiSppGSEA, V1 == "HALLMARK_TNFA_SIGNALING_VIA_NFKB" & shortName == "SGE1_plusTrt")$pval_downreg,
+             " IFNg at baseline p=",signif(subset(allMultiSppGSEA, V1 == "HALLMARK_INTERFERON_GAMMA_RESPONSE" & shortName == "SGE1_minusTrt")$pval_downreg, digits = 3),
+             ") and female baboons (",
+             "NFkB at LPS challenge p=",subset(allMultiSppGSEA, V1 == "HALLMARK_TNFA_SIGNALING_VIA_NFKB" & shortName == "BaboonFemale_plusTrt")$pval_downreg,
+             " IFNg at baseline p=",subset(allMultiSppGSEA, V1 == "HALLMARK_INTERFERON_GAMMA_RESPONSE" & shortName == "BaboonFemale_minusTrt")$pval_downreg,
+             ")."))
+
+```
+
+Reproductive Skew
+```{r Reproductive Skew}
+repSkew <- read.csv2(paste0(dataDir,"reprodSkew.csv"), sep = ",", dec = ".")
+
+repSkew$SppSex <- paste0(repSkew$Species,"\n",repSkew$Sex)
+repSkew$CommonName <- ifelse(repSkew$Species == "Papio_cynocephalus","baboon",
+                             ifelse(repSkew$Species == "Suricatta_suricata","meerkat","macaque"))
+repSkew$NameSex <- paste0(repSkew$CommonName,"\n",repSkew$Sex)
+
+
+ggplot(repSkew,
+       aes(x = NameSex,
+           y = Standardized_variance_success)) +
+  geom_point(size = 5, color = c(ctrlF,
+                                 ctrlM,
+                                 ctrlF,
+                                 ctrlM,
+                                 ctrlF,
+                                 ctrlM)) +
+  xlab("Species-Sex") +
+  ylab("Standardized Variance of\nReproductive Success") +
+  theme_minimal() + theme_bw()
+
+ggsave(paste0(figPaperDir,"5_repSkew_LRSVariance.png"), width = 6, height = 4)
+
+repSkewPlot <- subset(repSkew, NameSex %in% c("baboon\nmales",
+                                              "baboon\nfemales",
+                                              "meerkat\nfemales",
+                                              "macaque\nfemales"))
+
+repSkewPlot$NameSex <- factor(repSkewPlot$NameSex, levels = c("macaque\nfemales",
+                                                              "baboon\nfemales",
+                                                              "baboon\nmales",
+                                                              "meerkat\nfemales"))
+
+ggplot(repSkewPlot,
+       aes(x = NameSex,
+           y = Opposite_Sex_Ratio,
+           col = log2(Opposite_Sex_Ratio))) +
+  geom_point(size = 20) +
+  geom_hline(yintercept = 1, col = "grey15") +
+  xlab("Species-Sex") +
+  ylab("Ratio LRS v. Opposite Sex") +
+  theme_minimal() + theme_bw() + ylim(c(0,2)) +
+  theme(axis.text.x = element_text(size = 14)) +
+  scale_color_gradient(low = lowLRS, high = highLRS)
+
+ggsave(paste0(figPaperDir,"5_repSkew_OppSexRatio.png"), width = 6, height = 4)
+```
+
+```{r percent of known birthdays}
+read.csv2(paste0(dataDir,"KMPBirthdays.csv"), sep = ",")
+
+
+```
+
+```{r}
+
+allSamples <- unique(metadata[,colnames(metadata) %in% c("captureref","correctsampleID","sex","rationale","ageAtSample","pregStatusBackDate35","group","status_dom_sub")])
+
+allSamples <- subset(allSamples, ageAtSample > .95)
+
+dim(allSamples)
+
+length(unique(allSamples$correctsampleID))
+length(unique(allSamples$group))
+
+
+
+```
+
+
+```{r gene list sig in response}
+#nested emmreml run in genes only significant for status (711)
+nestLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_modelF_nested+Preg+WeightwKmatrix_emmreml")
+
+lpsOnly <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+ctrlOnly <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+#sig status
+sigLPSCtrl <- c(rownames(ctrlOnly)[ctrlOnly$fdr_status < .1],
+                rownames(lpsOnly)[lpsOnly$fdr_status < .1])
+
+nestLPSsigOnly <- nestLPS[rownames(nestLPS) %in% sigLPSCtrl,]
+
+#Status * Treatment Beta = Trt:Status Beta - Ctrl:Status Beta
+#Status * Treatment Variance = sqrt((Trt:Status Var)^2 + (Ctrl:Status)^2)
+#Status * Treatment P-Value = Use Std Beta as T.Test statistic, df=10,000
+
+nestLPSsigOnly$beta_interaction <- nestLPSsigOnly$beta_Trt.Status - nestLPSsigOnly$beta_Ctrl.Status
+nestLPSsigOnly$var_beta_interaction <- sqrt(nestLPSsigOnly$var_beta_Trt.Status^2 + nestLPSsigOnly$var_beta_Ctrl.Status^2)
+
+nestLPSsigOnly$t_interaction <- nestLPSsigOnly$beta_interaction / sqrt(nestLPSsigOnly$var_beta_interaction)
+nestLPSsigOnly$pval_interaction <- 2*pt(q=abs(nestLPSsigOnly$t_interaction), df=10000, lower.tail=FALSE)
+
+ggplot() + geom_histogram(aes(x = nestLPSsigOnly$pval_interaction), bins = 100)
+
+
+#sig trt
+nestLPSsigOnly$qval_interaction <- qvalue(nestLPSsigOnly$pval_interaction)$qvalue
+
+#26 genes
+genesSigMag <- rownames(subset(nestLPSsigOnly, qval_interaction < .1))
+
+nestLPSsigOnly[rownames(nestLPSsigOnly) %in% c("COMMD1","COMMD5","AKT1","EDN1"),]
+
+
+```
+
+
+### MYD88 and TRIF gene comparison, correlation bar chart
+```{r fig 5 F}
+paths <- rep(c("MYD88all","MYD88sig","TRIFall","TRIFsig"),3)
+pathOnly <- rep(c("MYD88","MYD88","TRIF","TRIF"),3)
+geneSet <- rep(c("all","sig","all","sig"),3)
+spps <- c(rep("fMac",4),rep("fBab",4),rep("mBab",4))
+pathwayGeneCorrs <- c(c(-.1,-.14,-.08,-.11), #fMac
+                      c(-.25,-.31,-.16,-.34),  #fBab
+                      c(.15,.29,.16,.17)) #mBab
+sigNonSig <- c("ns","ns","ns","ns",
+               "sig","ns","sig","ns",
+               "ns","sig","sig","ns")
+nGenes <- c(c(149,110,231,164), #fMac
+            c(154,27,234,27),  #fBab
+            c(154,80,234,97)) #mBab
+
+allpathCorrs <- cbind.data.frame(spps,paths,geneSet,pathOnly,pathwayGeneCorrs,sigNonSig,nGenes)
+allpathCorrs$sppPath <- paste0(allpathCorrs$spps,".",allpathCorrs$paths)
+
+allpathCorrs$sppPath <- factor(allpathCorrs$sppPath, levels = allpathCorrs$sppPath[order(allpathCorrs$pathOnly)])
+
+ggplot() +
+  geom_point(data = allpathCorrs,
+       aes(x = sppPath,
+           y = pathwayGeneCorrs,
+           col = sigNonSig,
+           size = nGenes,
+           shape = geneSet)) +
+  geom_hline(yintercept = 0) +
+  theme_minimal() + theme_bw() +
+  scale_color_manual(values = c("gray40","firebrick3")) +
+  scale_shape_manual(values = c(16,15)) +
+  theme(axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 4, angle = 90, vjust = 0.5),
+        axis.title = element_blank())
+ggsave(paste0(figPaperDir,"5g_TRIFMYD88_sppCorr.png"), width = 6, height = 4)
+
+
+```
+
+Calculate the statistical support for status with and without controlling for age, weight, pregnancy
+```{r}
+treatment <- "LPS"
+
+for (treatment in c("Ctrl","LPS","Dex","Gard")) {
+  #model Var is the variable to check the effect of before and after controlling for the control variable (ctrlVar)
+  modelVar <- "Status"
+  ctrlVar <- "Preg"
+  
+  #for (ctrlVar in c("Preg","Weight","StatusCentWeight")) {
+  for (ctrlVar in c("Preg","Weight")) {
+    
+    modelTitle <- paste0("modeling ",ctrlVar," as Tech Var.")
+    
+    origModel <- "F"
+    if (ctrlVar == "Preg") {
+      betaTitle <- "preg"
+      if (treatment %in% c("LPS","Ctrl")) {
+        ctrlModel <- "P"
+      } else {
+        ctrlModel <- "Q"
+        origModel <- "G"
+      }
+    } else if (ctrlVar == "Weight") {
+      betaTitle <- "weight"
+      if (treatment %in% c("LPS","Ctrl")) {
+        ctrlModel <- "T"
+      } else {
+        origModel <- "G"
+        ctrlModel <- "U"
+      }
+    } else if (ctrlVar == "StatusCentWeight") {
+      betaTitle <- "weight"
+      if (treatment %in% c("LPS","Ctrl")) {
+        ctrlModel <- "V"
+      } else {
+        origModel <- "G"
+        ctrlModel <- "W"
+      }
+    }
+    
+    #LPS/Ctrl
+    #P: F + Preg
+    #Dex/Guard
+    #Q: G + Preg
+    
+    #R: F + Status
+    #S: G + Status
+    
+    #T: F + Weight
+    #U: G + Weight
+
+    #V: F + Status Centered Weight
+    #W: G + Status Centered Weight
+
+    #Q control for preg directly
+    #
+    emremlOrigAll <- read.table(paste0(outDir,"allBatches_F_",
+                                       treatment,"only_10000genes_5lCPM_model",
+                                       origModel,"_basic+Preg+WeightwKmatrix_emmreml"))
+    emremlCtrlAll <- read.table(paste0(outDir,"allBatches_F_",
+                                       treatment,"only_10000genes_5lCPM_model",
+                                       ctrlModel,"_basic+Preg+WeightwKmatrix_emmreml"))
+    
+
+    emremlOrigAll$geneID <- rownames(emremlOrigAll)
+    emremlCtrlAll$geneID <- rownames(emremlCtrlAll)
+
+    emremlAllComp <- merge(emremlOrigAll, emremlCtrlAll, by = "geneID", suffixes = c(".orig",".ctrl"))
+
+    
+    ### id the controlled column here, copy to "beta_ctrlVar"
+    emremlAllComp$betaCtrlVar.orig <- emremlAllComp[,which(colnames(emremlAllComp) == paste0("beta_",betaTitle,".orig"))]
+    emremlAllComp$betaCtrlVar.ctrl <- emremlAllComp[,which(colnames(emremlAllComp) == paste0("beta_",betaTitle,".ctrl"))]
+    
+    plotR <- signif(cor.test(emremlAllComp$betaCtrlVar.ctrl,emremlAllComp$betaCtrlVar.orig)$estimate, digits = 6)
+    plotPval <- signif(cor.test(emremlAllComp$betaCtrlVar.ctrl,emremlAllComp$betaCtrlVar.orig)$p.value, digits = 6) 
+
+    
+    #want to compare the betas of modelVar
+    ggplot(data = emremlAllComp,
+           aes(x = betaCtrlVar.orig,
+               y = betaCtrlVar.ctrl)) +
+      geom_point(alpha = .3) +
+      geom_abline(slope = 1, intercept = 0, col = "grey30") +
+      xlab(paste0("Beta ",ctrlVar," Original Model")) +
+      ylab(paste0("Beta ",ctrlVar," Control Model")) +
+      theme_minimal() + theme_bw() +
+      ggtitle(paste0(ctrlVar," Beta Comparison | ",modelTitle," - ",treatment," only"),
+              subtitle = paste0("R = ",plotR," | p = ",plotPval))
+    ggsave(paste0(suppFigDir,"ctrl_v_original_",ctrlVar,"Betas_",treatment,"_ctrl",ctrlVar,"_allGenes.png"),
+           width = 6, height = 4)
+    
+    plotR <- signif(cor.test(emremlAllComp$beta_status.ctrl,emremlAllComp$beta_status.orig)$estimate, digits = 6)
+    plotPval <- signif(cor.test(emremlAllComp$beta_status.ctrl,emremlAllComp$beta_status.orig)$p.value, digits = 6) 
+    
+    ggplot(data = emremlAllComp,
+           aes(x = beta_status.orig,
+               y = beta_status.ctrl)) +
+      geom_point(alpha = .3) +
+      geom_abline(slope = 1, intercept = 0, col = "grey30") +
+      xlab("Beta Status Original Model") +
+      ylab("Beta Status Control Model") +
+      theme_minimal() + theme_bw() +
+      ggtitle(paste0("Status Beta Comparison | ",modelTitle," - ",treatment," only"),
+              subtitle = paste0("R = ",plotR," | p = ",plotPval))
+    ggsave(paste0(suppFigDir,"ctrl_v_original_statusBetas_",treatment,"_ctrl",ctrlVar,"_allGenes.png"),
+           width = 6, height = 4)
+    
+    ### id the controlled column here, copy to "pval_ctrlVar"
+    emremlOrigAll$pvalCtrlVar <- emremlOrigAll[,which(colnames(emremlOrigAll) == paste0("pval_",betaTitle))]
+
+    emremlCtrlAll$pvalCtrlVar <- emremlCtrlAll[,which(colnames(emremlCtrlAll) == paste0("pval_",betaTitle))]
+    
+    ### number and identity of genes significant at q < 0.10
+    
+    ##### get qvalues for the pvalues
+    emremlAllComp$qval_status.ctrl <- qvalue(emremlAllComp$pval_status.ctrl)$qvalue
+    emremlAllComp$qval_status.orig <- qvalue(emremlAllComp$pval_status.orig)$qvalue
+    
+    ##### get raw number differences (104 v 108), presumably lost
+    origSig <- sum(emremlAllComp$qval_status.orig < .1)
+    ctrlSig <- sum(emremlAllComp$qval_status.ctrl < .1)
+    
+    ##### get identity differences (N genes moved from sig - n.s.)
+    totalDiff <- sum(emremlAllComp$qval_status.orig < .1 & emremlAllComp$qval_status.ctrl > .1) + sum(emremlAllComp$qval_status.orig > .1 & emremlAllComp$qval_status.ctrl < .1)
+    
+    
+    #want to compare the QQ plots of modelVar
+    results <- "emremlOrigAll"
+    for (results in c("emremlOrigAll","emremlCtrlAll")) {
+      emremlResults <- get(results)
+      #sort by status
+      emremlResults <- emremlResults[order(emremlResults$pval_status),]
+      emremlResults$qqExpStatus <- -log10(sort(runif(length(rownames(emremlResults)), min = 0, max = 1)))
+      emremlResults$qqStatus <- -log10(emremlResults$pval_status)
+      
+      #sort by preg
+      emremlResults <- emremlResults[order(emremlResults$pvalCtrlVar),]
+      emremlResults$qqExpCtrlVar <- -log10(sort(runif(length(rownames(emremlResults)), min = 0, max = 1)))
+      emremlResults$qqCtrlVar <- -log10(emremlResults$pvalCtrlVar)
+      
+      assign(x = paste0(results), value = emremlResults)
+    }
+    
+    ggplot() +
+      geom_abline(slope = 1, intercept = 0) +
+      geom_point(aes(x = emremlOrigAll$qqExpCtrlVar,
+                     y = emremlOrigAll$qqCtrlVar), col = "grey") +
+      geom_point(aes(x = emremlCtrlAll$qqExpCtrlVar,
+                     y = emremlCtrlAll$qqCtrlVar), col = "dodgerblue") +
+      xlab("Expected -log10(pval)") +
+      ylab("Actual -log10(pval)") +
+      theme_minimal() + theme_bw() +
+      ggtitle(paste0("All Genes - ",ctrlVar," qq",
+              subtitle = paste0(modelTitle," - ",treatment," only")))
+    ggsave(paste0(suppFigDir,"ctrl_v_original_",treatment,"_plot",modelVar,"_ctrl",ctrlVar,"_allGenes.png"),
+           width = 5, height = 5)
+    
+    ggplot() +
+      geom_abline(slope = 1, intercept = 0) +
+      geom_point(aes(x = emremlOrigAll$qqExpStatus,
+                     y = emremlOrigAll$qqStatus), col = "grey") +
+      geom_point(aes(x = emremlCtrlAll$qqExpStatus,
+                     y = emremlCtrlAll$qqStatus), col = "dodgerblue") +
+      xlab("Expected -log10(pval)") +
+      ylab("Actual -log10(pval)") +
+      theme_minimal() + theme_bw() +
+      theme(plot.subtitle=element_text(size=8)) +
+      ggtitle(paste0("All Genes - Status qq | ",dim(emremlOrigAll)[1]," genes"),
+              subtitle = paste0(modelTitle," - ",treatment," only | nSig: orig=",origSig," ctrl=",ctrlSig," | total changes=",totalDiff))
+    ggsave(paste0(suppFigDir,"ctrl_v_original_",treatment,"_plot",ctrlVar,"_ctrl",ctrlVar,"_allGenes.png"),
+           width = 5, height = 5)
+    
+ 
+  }
+}
+
+
+
+
+```
+
+
+### effect of cell composition, R between before and after status betas 
+```{r}
+
+```
+
+
+
+### status centered mass
+```{r}
+treatment <- "LPS"
+
+for (treatment in c("Ctrl","LPS","Dex","Gard")) {
+  #model Var is the variable to check the effect of before and after controlling for the control variable (ctrlVar)
+  modelVar <- "Status"
+  ctrlVar <- "StatusCentWeight"
+  
+
+    modelTitle <- paste0("modeling ",ctrlVar," as Tech Var.")
+    
+    origModel <- "F"
+    if (ctrlVar == "Preg") {
+      betaTitle <- "preg"
+      if (treatment %in% c("LPS","Ctrl")) {
+        ctrlModel <- "P"
+      } else {
+        ctrlModel <- "Q"
+        origModel <- "G"
+      }
+    } else if (ctrlVar == "Weight") {
+      betaTitle <- "weight"
+      if (treatment %in% c("LPS","Ctrl")) {
+        ctrlModel <- "T"
+      } else {
+        origModel <- "G"
+        ctrlModel <- "U"
+      }
+    } else if (ctrlVar == "StatusCentWeight") {
+      betaTitle <- "weight"
+      if (treatment %in% c("LPS","Ctrl")) {
+        ctrlModel <- "V"
+      } else {
+        origModel <- "G"
+        ctrlModel <- "W"
+      }
+    }
+
+
+    #V: F + Status Centered Weight
+    #W: G + Status Centered Weight
+
+    #Q control for preg directly
+    #
+    emremlOrigAll <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/fullAnalysis/output/",
+                                       "allBatches_F_",
+                                       treatment,"only_10000genes_5lCPM_model",
+                                       origModel,"_basicPreg+Weight_emmreml"))
+    emremlCtrlAll <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/fullAnalysis/output/",
+                                       "allBatches_F_",
+                                       treatment,"only_10000genes_5lCPM_model",
+                                       ctrlModel,"_basicPreg+Weight_emmreml"))
+
+    emremlOrigAll$geneID <- rownames(emremlOrigAll)
+    emremlCtrlAll$geneID <- rownames(emremlCtrlAll)
+
+    emremlAllComp <- merge(emremlOrigAll, emremlCtrlAll, by = "geneID", suffixes = c(".orig",".ctrl"))
+
+    
+    ### id the controlled column here, copy to "beta_ctrlVar"
+    emremlAllComp$betaCtrlVar.orig <- emremlAllComp[,which(colnames(emremlAllComp) == paste0("beta_",betaTitle,".orig"))]
+    emremlAllComp$betaCtrlVar.ctrl <- emremlAllComp[,which(colnames(emremlAllComp) == paste0("beta_",betaTitle,".ctrl"))]
+    
+    plotR <- signif(cor.test(emremlAllComp$betaCtrlVar.ctrl,emremlAllComp$betaCtrlVar.orig)$estimate, digits = 6)
+    plotPval <- signif(cor.test(emremlAllComp$betaCtrlVar.ctrl,emremlAllComp$betaCtrlVar.orig)$p.value, digits = 6) 
+
+    
+    #want to compare the betas of modelVar
+    ggplot(data = emremlAllComp,
+           aes(x = betaCtrlVar.orig,
+               y = betaCtrlVar.ctrl)) +
+      geom_point(alpha = .3) +
+      geom_abline(slope = 1, intercept = 0, col = "grey30") +
+      xlab(paste0("Beta ",ctrlVar," Original Model")) +
+      ylab(paste0("Beta ",ctrlVar," Control Model")) +
+      theme_minimal() + theme_bw() +
+      ggtitle(paste0(ctrlVar," Beta Comparison | ",modelTitle," - ",treatment," only"),
+              subtitle = paste0("R = ",plotR," | p = ",plotPval))
+    ggsave(paste0(suppFigDir,"ctrl_v_original_",ctrlVar,"Betas_",treatment,"_ctrl",ctrlVar,"_allGenes.png"),
+           width = 6, height = 4)
+    
+    plotR <- signif(cor.test(emremlAllComp$beta_status.ctrl,emremlAllComp$beta_status.orig)$estimate, digits = 6)
+    plotPval <- signif(cor.test(emremlAllComp$beta_status.ctrl,emremlAllComp$beta_status.orig)$p.value, digits = 6) 
+    
+    ggplot(data = emremlAllComp,
+           aes(x = beta_status.orig,
+               y = beta_status.ctrl)) +
+      geom_point(alpha = .3) +
+      geom_abline(slope = 1, intercept = 0, col = "grey30") +
+      xlab("Beta Status Original Model") +
+      ylab("Beta Status Control Model") +
+      theme_minimal() + theme_bw() +
+      ggtitle(paste0("Status Beta Comparison | ",modelTitle," - ",treatment," only"),
+              subtitle = paste0("R = ",plotR," | p = ",plotPval))
+    ggsave(paste0(suppFigDir,"ctrl_v_original_statusBetas_",treatment,"_ctrl",ctrlVar,"_allGenes.png"),
+           width = 6, height = 4)
+    
+    ### id the controlled column here, copy to "pval_ctrlVar"
+    emremlOrigAll$pvalCtrlVar <- emremlOrigAll[,which(colnames(emremlOrigAll) == paste0("pval_",betaTitle))]
+
+    emremlCtrlAll$pvalCtrlVar <- emremlCtrlAll[,which(colnames(emremlCtrlAll) == paste0("pval_",betaTitle))]
+
+
+    #want to compare the QQ plots of modelVar
+    results <- "emremlOrigAll"
+    for (results in c("emremlOrigAll","emremlCtrlAll")) {
+      emremlResults <- get(results)
+      #sort by status
+      emremlResults <- emremlResults[order(emremlResults$pval_status),]
+      emremlResults$qqExpStatus <- -log10(sort(runif(length(rownames(emremlResults)), min = 0, max = 1)))
+      emremlResults$qqStatus <- -log10(emremlResults$pval_status)
+      
+      #sort by preg
+      emremlResults <- emremlResults[order(emremlResults$pvalCtrlVar),]
+      emremlResults$qqExpCtrlVar <- -log10(sort(runif(length(rownames(emremlResults)), min = 0, max = 1)))
+      emremlResults$qqCtrlVar <- -log10(emremlResults$pvalCtrlVar)
+      
+      assign(x = paste0(results), value = emremlResults)
+    }
+    
+    ggplot() +
+      geom_abline(slope = 1, intercept = 0) +
+      geom_point(aes(x = emremlOrigAll$qqExpCtrlVar,
+                     y = emremlOrigAll$qqCtrlVar), col = "grey") +
+      geom_point(aes(x = emremlCtrlAll$qqExpCtrlVar,
+                     y = emremlCtrlAll$qqCtrlVar), col = "dodgerblue") +
+      xlab("Expected -log10(pval)") +
+      ylab("Actual -log10(pval)") +
+      theme_minimal() + theme_bw() +
+      ggtitle(paste0("All Genes - ",ctrlVar," qq",
+              subtitle = paste0(modelTitle," - ",treatment," only")))
+    ggsave(paste0(suppFigDir,"ctrl_v_original_",treatment,"_plot",modelVar,"_ctrl",ctrlVar,"_allGenes.png"),
+           width = 5, height = 5)
+    
+    ggplot() +
+      geom_abline(slope = 1, intercept = 0) +
+      geom_point(aes(x = emremlOrigAll$qqExpStatus,
+                     y = emremlOrigAll$qqStatus), col = "grey") +
+      geom_point(aes(x = emremlCtrlAll$qqExpStatus,
+                     y = emremlCtrlAll$qqStatus), col = "dodgerblue") +
+      xlab("Expected -log10(pval)") +
+      ylab("Actual -log10(pval)") +
+      theme_minimal() + theme_bw() +
+      ggtitle("All Genes - Status qq",
+              subtitle = paste0(modelTitle," - ",treatment," only"))
+    ggsave(paste0(suppFigDir,"ctrl_v_original_",treatment,"_plot",ctrlVar,"_ctrl",ctrlVar,"_allGenes.png"),
+           width = 5, height = 5)
+    
+ 
+  
+}
+
+
+
+
+```
+
+
+Plot the effect of status in each treatment condition (a qq plot for Control, LPS, Dex, & Gard), to show that Dex supresses status effects
+
+```{r qqplots for status within treated samples FEMALE}
+
+#generate a dataframe, with columns: gene name, GEdivision, GEtile, qqActual, qqExpected
+geneNames <- vector()
+qqActual <- vector()
+qqExpected <- vector()
+trtCondition <- vector()
+
+## LPS
+for (t in c("LPS","Ctrl","Dex","Gard")) {
+  if (t %in% c("LPS","Ctrl")) {
+    model <- "F"
+  } else {
+    model <- "G"
+  }
+  
+  emremlallbatch <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_",t,"only_10000genes_5lCPM_model",model,"_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status"))
+  
+  emremlallbatchTrtSort <- emremlallbatch[order(emremlallbatch$pval_status),]
+  
+  #no quantile
+  geneNames <- c(geneNames,rownames(emremlallbatchTrtSort))
+  qqActual <- c(qqActual,-log10(emremlallbatchTrtSort$pval_status))
+  #qqExpected <- c(qqExpected,-log10(1:length(emremlallbatch$pval_status) / length(emremlallbatch$pval_status)))
+  qqExpected <- c(qqExpected,-log10(sort(runif(length(rownames(emremlallbatchTrtSort)), min = 0, max = 1))))
+  trtCondition <- c(trtCondition,rep(t,length(rownames(emremlallbatchTrtSort))))
+}
+
+
+qqTreatment <- cbind.data.frame(geneNames,qqActual,qqExpected,trtCondition)
+
+ggplot(data = qqTreatment, aes(x = qqExpected,
+                               y = qqActual,
+                               col = trtCondition)) +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point() +
+  scale_color_manual(values = c(ctrlF,dexF,gardF,lpsF)) +
+  theme_minimal() + theme_bw() +
+  ggtitle("Status Treatment-only p-value qqPlot",
+          subtitle = paste0("Female, LPS, All Batches, min logCPM > 5, unique genes = ",length(unique(qqTreatment$geneNames)))) +
+  ylab("-log10(pval) Observed") + xlab("-log10(pval) Expected (from flat dist.)")
+
+
+ggsave(filename = paste0(suppFigDir,"Female_allTrt_allBatches__StatusTrtPval_byTrt.png"), width = 6, height = 6)
+
+```
+
+```{r}
+
+
+
+"In support of this possibility, all genes that are more highly expressed in dominant individuals in the LPS or Gard condition are also upregulated upon stimulation with LPS or Gard, respectively (Fisher’s exact test p = xxx; Supplementary Table xxx)"
+```
+
+
+
+
+```{r preg and mass models}
+#LPS/Ctrl
+#P: F + Preg
+#Dex/Guard
+#Q: G + Preg
+
+#R: F + Status
+#S: G + Status
+
+#T: F + Weight
+#U: G + Weight
+
+#V: F + Status Centered Weight
+#W: G + Status Centered Weight
+
+#Q control for preg directly
+#
+treatment <- "LPS"
+
+
+emremlPreg <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_preg")
+
+
+
+emremlOrig <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+
+
+emremlMass <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_weight")
+sum(emremlMass$fdr_weight < .1)
+emremlMass <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_weight")
+sum(emremlMass$fdr_weight < .1)
+emremlMass <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gardonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_weight")
+sum(emremlMass$fdr_weight < .1)
+emremlMass <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Dexonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_weight")
+sum(emremlMass$fdr_weight < .1)
+
+
+emremlPreg <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_preg")
+sum(emremlPreg$fdr_preg < .1)
+emremlMass <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_preg")
+sum(emremlPreg$fdr_preg < .1)
+emremlMass <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gardonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_preg")
+sum(emremlPreg$fdr_preg < .1)
+emremlMass <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Dexonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_preg")
+sum(emremlPreg$fdr_preg < .1)
+
+
+
+"Pregnancy status and body mass (but not age) are also associated with gene expression levels in our sample (n = xxx – xxx body mass associated genes; n=xxx – xxx pregnancy-associated genes, FDR < xxx, "
+
+```
+
+
+```{r}
+
+"In addition to controlling for pregnancy and body mass in our main model, post hoc analyses showed that regressing out body mass or pregnancy from the gene expression data did not alter our findings for dominance rank (r for dominance effect betas in the original model versus after first removing body mass and pregnancy effects > 0.99, Supplemental Materials)."
+
+emremlOrig <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml")
+emremlMass <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelT_basic+Preg+WeightwKmatrix_emmreml")
+emremlPreg <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelP_basic+Preg+WeightwKmatrix_emmreml")
+
+colnames(emremlMass) <- paste0(colnames(emremlMass),".mass")
+colnames(emremlPreg) <- paste0(colnames(emremlPreg),".preg")
+
+cor.test(emremlMass$beta_status.mass,emremlOrig$beta_status)
+cor.test(emremlPreg$beta_status.preg,emremlOrig$beta_status)
+
+
+```
+
+```{r}
+
+allMetaF <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_metadata.RDS")
+allMetaM <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_allTrt_10000genes_5lCPM_metadata.RDS")
+
+#capture only
+allMetaF <- unique(allMetaF[colnames(allMetaF) %in% c("group","captureref","sex","status_dom_sub",
+                                                      "ageAtSample","evidenceofTB.","draw_time","bloodVolmL",
+                                                      "sampleDate","sampleYear","sampleMonth","rationale","transitionID",
+                                                      "correctsampleID","birthdate","collectionRationale","climSeason")])
+allMetaF$sMonthDec <- round(as.numeric(format(as.Date(allMetaF$sampleDate, format="%Y-%m-%d"),"%m")) +
+                              as.numeric(format(as.Date(allMetaF$sampleDate, format="%Y-%m-%d"),"%d")) / 31, digits = 2)
+
+allMetaM <- unique(allMetaM[colnames(allMetaM) %in% c("group","captureref","sex","status_dom_sub",
+                                                      "ageAtSample","evidenceofTB.","draw_time","bloodVolmL",
+                                                      "sampleDate","sampleYear","sampleMonth","rationale","transitionID",
+                                                      "correctsampleID","birthdate","collectionRationale","climSeason")])
+allMetaM$sMonthDec <- round(as.numeric(format(as.Date(allMetaM$sampleDate, format="%Y-%m-%d"),"%m")) +
+                              as.numeric(format(as.Date(allMetaM$sampleDate, format="%Y-%m-%d"),"%d")) / 31, digits = 2)
+
+
+allMeta <- rbind.data.frame(allMetaF,allMetaM)
+
+
+
+
+"Following quality control, our final data set included RNA-seq profiles from 113 individually recognized meerkats in the Kalahari study population (740 total samples from 52 females and 61 males in 15 social groups, obtained across xxx blood draws; Figure 1; Supplementary Table S1; mean = 5.87 million ± 5.06 million s.d reads; Supplementary Table S2)."
+
+
+```
+

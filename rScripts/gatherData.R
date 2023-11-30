@@ -19,18 +19,20 @@
 # 
 workDir <- workDir
 batchList <- c("allBatches")
-focalSex <- "F"
-focalTreatment <- "LPS"
+#focalSex <- "F"
+focalSex <- "M"
+#focalTreatment <- "LPS"
+focalTreatment <- "allTrt"
 minLogCPM <- 5
 minGenes <- 10000
 #if TRUE, focal treatment is the ONLY treatment used
 #focal treatment object becomes "LPSonly" or "Ctrlonly" instead of "LPS"
-singleTrt <- TRUE
+singleTrt <- FALSE
 #combineTrt is all 4 treatments (LPS/Gard/Dex/Ctrl) analyzed jointly
-combineTrt <- FALSE
+combineTrt <- TRUE
 
 ### longitudinal
-longReSample <- TRUE
+longReSample <- FALSE
 ReSampVar <- "status"
 #ReSampVar <- "preg"
 
@@ -177,7 +179,7 @@ gatherData <- function(workDir, batchList, focalSex, focalTreatment, minGenes = 
   
   #subtract dates to get days, divide by 365 to get years
   metadataRationale$finalAgeAtSample <- as.numeric(metadataRationale$sampleDDMMYY - metadataRationale$finalBirthday) / 365
-  metadataRationale$ageAtSample <- as.numeric(metadataRationale$ageAtSample)
+  #metadataRationale$ageAtSample <- as.numeric(metadataRationale$ageAtSample)
   
   metadataRationale$ageAtSample <- metadataRationale$finalAgeAtSample
   metadataRationale$birthdate <- metadataRationale$finalBirthday
@@ -199,7 +201,7 @@ gatherData <- function(workDir, batchList, focalSex, focalTreatment, minGenes = 
     idRow <- which(allWeights$animal_id == metadataRationale$correctsampleID[n] | allWeights$animal_id == metadataRationale$animal_id[n])
     sampdateRow <- which(allWeights$sampleDate == metadataRationale$sampleDDMMYY[n])
     
-    wghtRow <- idRow[which(idRow %in% sampdateRow)]
+    wghtRow <- idRow[which(idRow %in% sampdateRow)[1]]
     
     metadataRationale$avgWeight60d[n] <- allWeights$avgWeight60d[wghtRow]
     metadataRationale$weightAtSampling[n] <- allWeights$weightAtSampling[wghtRow]
@@ -394,24 +396,33 @@ gatherData <- function(workDir, batchList, focalSex, focalTreatment, minGenes = 
   #check our order
   all(metaFiltered$sampleID == colnames(countsFiltered))
   
-  ### Center weight, center weight by status
+  ### Center weight, center weight by status, center age, center age by status
   metaFiltered$weight <- ifelse(metaFiltered$avgWeight60d > 0, metaFiltered$avgWeight60d, metaFiltered$avgWeight6mo)
   #subsetMeta$centWeight
   #subsetMeta$statCentWeight
   
   #unique weights
-  weightsOnly <- unique(metaFiltered[,colnames(metaFiltered) %in% c("animal_id","weight","status_dom_sub")])
+  weightsOnly <- unique(metaFiltered[,colnames(metaFiltered) %in% c("animal_id","weight","status_dom_sub","ageAtSample")])
   
-  #center all weights
+  #center all weights & ages
   weightsOnly$centWeight <- scale(weightsOnly$weight, center = T, scale = F)
+  weightsOnly$centAge <- scale(weightsOnly$ageAtSample, center = T, scale = F)
   
   #center weight within status
   weightsOnly$statCentWeight <- 0
   weightsOnly$statCentWeight[weightsOnly$status_dom_sub == "S"] <- scale(weightsOnly$weight[weightsOnly$status_dom_sub == "S"], center = T, scale = F)
   weightsOnly$statCentWeight[weightsOnly$status_dom_sub == "D"] <- scale(weightsOnly$weight[weightsOnly$status_dom_sub == "D"], center = T, scale = F)
   
+  weightsOnly$statCentAge <- 0
+  weightsOnly$statCentAge[weightsOnly$status_dom_sub == "S"] <- scale(weightsOnly$ageAtSample[weightsOnly$status_dom_sub == "S"], center = T, scale = F)
+  weightsOnly$statCentAge[weightsOnly$status_dom_sub == "D"] <- scale(weightsOnly$ageAtSample[weightsOnly$status_dom_sub == "D"], center = T, scale = F)
+  
+  
   metaFiltered$centWeight <- 0
   metaFiltered$statCentWeight <- 0
+  metaFiltered$centAge <- 0
+  metaFiltered$statCentAge <- 0
+  
   
   for (r in 1:dim(metaFiltered)[1]) {
     animalID <- metaFiltered$animal_id[r]
@@ -419,6 +430,8 @@ gatherData <- function(workDir, batchList, focalSex, focalTreatment, minGenes = 
     status <- metaFiltered$status_dom_sub[r]
     metaFiltered$centWeight[r] <- as.numeric(subset(weightsOnly, status_dom_sub == status & animal_id == animalID & weight == exactWeight)$centWeight)
     metaFiltered$statCentWeight[r] <- as.numeric(subset(weightsOnly, status_dom_sub == status & animal_id == animalID & weight == exactWeight)$statCentWeight)
+    metaFiltered$centAge[r] <- as.numeric(subset(weightsOnly, status_dom_sub == status & animal_id == animalID & weight == exactWeight)$centAge)
+    metaFiltered$statCentAge[r] <- as.numeric(subset(weightsOnly, status_dom_sub == status & animal_id == animalID & weight == exactWeight)$statCentAge)
   }
   
   subsetMeta <- metaFiltered

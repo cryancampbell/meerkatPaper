@@ -22,3 +22,460 @@ dir.create(figDir)
 dir.create(outDir)
 
 ```
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(ggpubr)
+library(cowplot)
+library(ggtext)
+
+suppFigDir <- "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/figures/paper/supp/"
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+# COLORS #
+
+#dark=m, light=f
+#Ctrl
+ctrlM <- "grey40"
+ctrlF <- "grey70"
+ctrlF <- "grey20"
+ctrlF <- ""
+ctrlM <- "darkorchid4"
+ctrlM <- "#B5A9F4"
+ctrlF <- "#154376"
+ctrlM <- "#4B9CD3"
+
+#Gard
+gardF <- "#947322"
+gardM <- "#E0B13F"
+
+#LPS
+lpsF <- "#944F40"
+lpsM <- "#E06E55"
+
+#Dex
+dexM <- "#4BC4E0"
+dexF <- "#358394"
+
+
+highES <- "forestgreen"
+lowES <- "orange"
+
+
+#LRS
+lowLRS <- "deeppink"
+highLRS <- "darkorchid"
+highLRS <- "#779CD7"
+lowLRS <- "#E08FC6"
+
+
+```
+
+
+### Figures
+
+```{r Figure S1 Heavier, Older, more Pregnant Dom Females}
+allMetaF <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_metadata.RDS")
+plotSFig1 <- allMetaF[,colnames(allMetaF) %in% c("group","captureref","sex","status_dom_sub","ageAtSample","avgWeight60d","pregStatusBackDate35","correctsampleID")]
+
+plotSFig1 <- unique(plotSFig1)
+plotSFig1$status_dom_sub <- factor(plotSFig1$status_dom_sub, levels = c("S","D"))
+
+
+agePlot <- ggplot(plotSFig1,
+                     aes(x = status_dom_sub,
+                         y = ageAtSample,
+                         fill = status_dom_sub)) +
+  theme_minimal() + theme_bw() + labs(fill = "Status") +
+  xlab("Status") + ylab("Age (years)") +
+  geom_violin(draw_quantiles = c(.25,.5,.75))
+
+weightPlot <- ggplot(plotSFig1,
+                     aes(x = status_dom_sub,
+                         y = avgWeight60d,
+                         fill = status_dom_sub)) +
+  theme_minimal() + theme_bw() + labs(fill = "Status") +
+  xlab("Status") + ylab("Weight (g)") +
+  geom_violin(draw_quantiles = c(.25,.5,.75))
+
+
+pregRaw <- ggplot(plotSFig1,
+                     aes(x = status_dom_sub,
+                         fill = pregStatusBackDate35)) +
+  theme_minimal() + theme_bw() + labs(fill = "Pregnant") +
+  xlab("Status") + ylab("Number of Female\nMeerkat Captures") +
+  scale_fill_manual(values = c("#C77CFF","#7CAE00")) +
+  geom_bar(position = "stack")
+  
+pregFraction <- ggplot(plotSFig1,
+                     aes(x = status_dom_sub,
+                         fill = pregStatusBackDate35)) +
+  theme_minimal() + theme_bw() + labs(fill = "Pregnant") +
+  xlab("Status") + ylab("Fraction of Female\nMeerkat Captures Pregnant") +
+  scale_fill_manual(values = c("#C77CFF","#7CAE00")) +
+  geom_bar(position = "fill")
+
+plot_grid(agePlot, weightPlot, pregRaw, pregFraction, labels = c("A","B","C","D"), label_size = 12)
+
+ggsave(filename = paste0(suppFigDir,"Female_heavier_older_morePreg.png"), width = 8, height = 6)
+
+
+#### t-tests for supp text
+wilcox.test(subset(plotSFig1, status_dom_sub == "S")$ageAtSample,
+            subset(plotSFig1, status_dom_sub == "D")$ageAtSample, alternative = "less")
+
+t.test(subset(plotSFig1, status_dom_sub == "S")$avgWeight60d,
+       subset(plotSFig1, status_dom_sub == "D")$avgWeight60d, alternative = "less")
+
+
+
+pregStatusFETMat <- matrix(c(sum(plotSFig1$status_dom_sub == "D" & plotSFig1$pregStatusBackDate35 == TRUE) + 2,
+                             sum(plotSFig1$status_dom_sub == "S" & plotSFig1$pregStatusBackDate35 == TRUE),
+                             sum(plotSFig1$status_dom_sub == "D" & plotSFig1$pregStatusBackDate35 == FALSE) - 2,
+                             sum(plotSFig1$status_dom_sub == "S" & plotSFig1$pregStatusBackDate35 == FALSE)), byrow = T, nrow = 2)
+
+fishP <- signif(fisher.test(pregStatusFETMat)$p.value, digits = 3)
+fishEst <- signif(fisher.test(pregStatusFETMat)$estimate, digits = 3)
+
+
+```
+
+```{r Figure S2 3prime bias in GE Mapping}
+
+```
+
+```{r Figure S3 Pregnancy Effects on GE}
+
+#Ctrl
+ctrlF <- "grey70"
+#Gard
+gardF <- "#E0B13F"
+#LPS
+lpsF <- "#E06E55"
+#Dex
+dexF <- "#4BC4E0"
+
+
+
+
+
+#generate a dataframe, with columns: gene name, GEdivision, GEtile, qqActual, qqExpected
+geneNames <- vector()
+qqActual <- vector()
+qqExpected <- vector()
+trtCondition <- vector()
+
+t <- "LPS"
+
+## LPS
+for (t in c("LPS","Ctrl","Dex","Gard")) {
+  if (t %in% c("LPS","Ctrl")) {
+    model <- "F"
+  } else {
+    model <- "G"
+  }
+  
+  emremlallbatch <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_",t,
+                                      "only_10000genes_5lCPM_model",model,"_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status"))
+  
+  emremlallbatchTrtSort <- emremlallbatch[order(emremlallbatch$pval_preg),]
+  
+  #no quantile
+  geneNames <- c(geneNames,rownames(emremlallbatchTrtSort))
+  qqActual <- c(qqActual,-log10(emremlallbatchTrtSort$pval_preg))
+  #qqExpected <- c(qqExpected,-log10(1:length(emremlallbatch$pval_status) / length(emremlallbatch$pval_status)))
+  qqExpected <- c(qqExpected,-log10(sort(runif(length(rownames(emremlallbatchTrtSort)), min = 0, max = 1))))
+  trtCondition <- c(trtCondition,rep(t,length(rownames(emremlallbatchTrtSort))))
+}
+
+
+qqTreatment <- cbind.data.frame(geneNames,qqActual,qqExpected,trtCondition)
+
+ggplot(data = qqTreatment, aes(x = qqExpected,
+                               y = qqActual,
+                               col = trtCondition)) +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point() +
+  scale_color_manual(values = c(ctrlF,dexF,gardF,lpsF)) +
+  theme_minimal() + theme_bw() +
+  labs(col = "Treatment") +
+  ggtitle("") +
+  ylab("-log<sub>10</sub>(pval) Observed") + xlab(bquote("-log<sub>10</sub>(pval) Expected (from uniform distribution)")) +
+  theme(axis.title.x = element_markdown(),
+        axis.title.y = element_markdown())
+
+ggsave(filename = paste0(suppFigDir,"Female_trtSpecifc_Preg_Pval_byTrt.png"), width = 6, height = 6)
+```
+
+```{r Figure S4 Male v Female effect of response to treatment}
+lpsPlot <- ggplot(trtResults,
+       aes(x = beta_treatment.LPS.F,
+           y = beta_treatment.LPS.M)) +
+  theme_minimal() + theme_bw() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm", formula = "y~x") +
+  xlab("LPS Treatment Effect Size, Females") +
+  ylab("LPS Treatment Effect Size, Males") +
+  stat_cor() 
+
+dexPlot <- ggplot(trtResults,
+       aes(x = beta_treatment.Dex.F,
+           y = beta_treatment.Dex.M)) +
+  theme_minimal() + theme_bw() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm", formula = "y~x") +
+  xlab("Dex Treatment Effect Size, Females") +
+  ylab("Dex Treatment Effect Size, Males") +
+  stat_cor()
+
+gardPlot <- ggplot(trtResults,
+       aes(x = beta_treatment.Gard.F,
+           y = beta_treatment.Gard.M)) +
+  theme_minimal() + theme_bw() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm", formula = "y~x") +
+  xlab("Gard Treatment Effect Size, Females") +
+  ylab("Gard Treatment Effect Size, Males") +
+  stat_cor()
+
+plot_grid(lpsPlot, gardPlot, dexPlot, labels = c("A","B","C"), label_size = 12, nrow = 1, ncol = 3)
+ggsave(filename = paste0(suppFigDir,"trtEffect_by_sex.png"), width = 9, height = 4)
+
+```
+
+```{r Figure S5 Effect of status, Male v Female, all treatment}
+lpsPlot <- ggplot(trtResults,
+       aes(x = beta_status.LPS.F,
+           y = beta_status.LPS.M)) +
+  theme_minimal() + theme_bw() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm", formula = "y~x") +
+  xlab("Status Effect Size,\nLPS Condition, Females") +
+  ylab("Status Effect Size,\nLPS Condition, Males") +
+  stat_cor()
+
+dexPlot <- ggplot(trtResults,
+       aes(x = beta_status.Dex.F,
+           y = beta_status.Dex.M)) +
+  theme_minimal() + theme_bw() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm", formula = "y~x") +
+  xlab("Status Effect Size,\nDex Condition, Females") +
+  ylab("Status Effect Size,\nDex Condition, Males") +
+  stat_cor()
+
+gardPlot <- ggplot(trtResults,
+       aes(x = beta_status.Gard.F,
+           y = beta_status.Gard.M)) +
+  theme_minimal() + theme_bw() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm", formula = "y~x") +
+  xlab("Status Effect Size,\nGard Condition, Females") +
+  ylab("Status Effect Size,\nGard Condition, Males") +
+  stat_cor()
+
+plot_grid(lpsPlot, gardPlot, dexPlot, labels = c("A","B","C"), label_size = 12, nrow = 1, ncol = 3)
+ggsave(filename = paste0(suppFigDir,"statusEffect_by_sex.png"), width = 9, height = 4)
+
+
+```
+
+```{r Figure S6 qqplot of Female Status effect in each of the 4 condition-specific models}
+#generate a dataframe, with columns: gene name, GEdivision, GEtile, qqActual, qqExpected
+geneNames <- vector()
+qqActual <- vector()
+qqExpected <- vector()
+trtCondition <- vector()
+
+## LPS
+for (t in c("LPS","Ctrl","Dex","Gard")) {
+  if (t %in% c("LPS","Ctrl")) {
+    model <- "F"
+  } else {
+    model <- "G"
+  }
+  
+  emremlallbatch <- read.table(paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_",t,"only_10000genes_5lCPM_model",model,"_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status"))
+  
+  emremlallbatchTrtSort <- emremlallbatch[order(emremlallbatch$pval_status),]
+  
+  #no quantile
+  geneNames <- c(geneNames,rownames(emremlallbatchTrtSort))
+  qqActual <- c(qqActual,-log10(emremlallbatchTrtSort$pval_status))
+  #qqExpected <- c(qqExpected,-log10(1:length(emremlallbatch$pval_status) / length(emremlallbatch$pval_status)))
+  qqExpected <- c(qqExpected,-log10(sort(runif(length(rownames(emremlallbatchTrtSort)), min = 0, max = 1))))
+  trtCondition <- c(trtCondition,rep(t,length(rownames(emremlallbatchTrtSort))))
+}
+
+
+qqTreatment <- cbind.data.frame(geneNames,qqActual,qqExpected,trtCondition)
+
+ggplot(data = qqTreatment, aes(x = qqExpected,
+                               y = qqActual,
+                               col = trtCondition)) +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point() +
+  scale_color_manual(values = c(ctrlF,dexF,gardF,lpsF)) +
+  theme_minimal() + theme_bw() +
+  labs(col = "Treatment") +
+  ggtitle("") +
+  ylab("-log<sub>10</sub>(pval) Observed") + xlab("-log<sub>10</sub>(pval) Expected (from uniform distribution)") +
+  theme(axis.title.x = element_markdown(),
+        axis.title.y = element_markdown())
+
+ggsave(filename = paste0(suppFigDir,"Female_allTrt_allBatches__StatusTrtPval_byTrt.png"), width = 6, height = 6)
+```
+
+```{r Figure S7 Regress out the effect of Mass, Preg, and Age}
+fLPSbase <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+colnames(fLPSbase) <- paste0(colnames(fLPSbase),".base")
+fLPSbase$gene <- rownames(fLPSbase)
+
+fLPSctrlPreg <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelP_basic+Preg+WeightwKmatrix_emmreml")
+colnames(fLPSctrlPreg) <- paste0(colnames(fLPSctrlPreg),".cPreg")
+fLPSctrlPreg$gene <- rownames(fLPSctrlPreg)
+
+fLPSctrlWeight <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelT_basic+Preg+WeightwKmatrix_emmreml")
+colnames(fLPSctrlWeight) <- paste0(colnames(fLPSctrlWeight),".cWeight")
+fLPSctrlWeight$gene <- rownames(fLPSctrlWeight)
+
+fLPSctrlAge <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelH_basic+Preg+WeightwKmatrix_emmreml")
+colnames(fLPSctrlAge) <- paste0(colnames(fLPSctrlAge),".cAge")
+fLPSctrlAge$gene <- rownames(fLPSctrlAge)
+
+lpsCompareA <- merge(fLPSbase,fLPSctrlPreg, by = "gene")
+
+lpsCompareB <- merge(fLPSctrlWeight,fLPSctrlAge, by = "gene")
+
+lpsComp <- merge(lpsCompareA,lpsCompareB, by = "gene")
+
+
+#P: F + Preg
+#R: F + Status
+#T: F + Weight
+#H: F + Age
+
+
+pregPlot <- ggplot(lpsComp,
+       aes(x = beta_status.base,
+           y = beta_status.cPreg)) +
+  theme_minimal() + theme_bw() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm", formula = "y~x") +
+  xlab("Female Status Effect Size,\nBase") +
+  ylab("Female Status Effect Size,\nCtrl Preg") +
+  stat_cor() 
+
+agePlot <- ggplot(lpsComp,
+       aes(x = beta_status.base,
+           y = beta_status.cAge)) +
+  theme_minimal() + theme_bw() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm", formula = "y~x") +
+  xlab("Female Status Effect Size,\nBase") +
+  ylab("Female Status Effect Size,\nCtrl Age") +
+  stat_cor()
+
+weightPlot <- ggplot(lpsComp,
+       aes(x = beta_status.base,
+           y = beta_status.cWeight)) +
+  theme_minimal() + theme_bw() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm", formula = "y~x") +
+  xlab("Female Status Effect Size,\nBase") +
+  ylab("Female Status Effect Size,\nCtrl Body Mass") +
+  stat_cor()
+
+plot_grid(pregPlot, agePlot, weightPlot, labels = c("A","B","C"), label_size = 12, nrow = 1, ncol = 3)
+ggsave(filename = paste0(suppFigDir,"FigS7_ctrl_for_status.png"), width = 9, height = 4)
+```
+
+```{r Figure #S8 Model with B and T Cells included}
+### effect effect plot
+
+fLPSbase <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+colnames(fLPSbase) <- paste0(colnames(fLPSbase),".base")
+fLPSbase$gene <- rownames(fLPSbase)
+
+fLPSctrlCells <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+Weight+BTcellwKmatrix_emmreml")
+colnames(fLPSctrlCells) <- paste0(colnames(fLPSctrlCells),".cCell")
+fLPSctrlCells$gene <- rownames(fLPSctrlCells)
+
+lpsComp <- merge(fLPSbase,fLPSctrlCells, by = "gene")
+
+
+cellPlot <- ggplot(lpsComp,
+       aes(x = beta_status.base,
+           y = beta_status.cCell)) +
+  theme_minimal() + theme_bw() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "lm", formula = "y~x") +
+  xlab("Female Status Effect Size,\nBase") +
+  ylab("Female Status Effect Size,\nCtrl B & T-Cells") +
+  stat_cor() 
+
+### qq plot
+
+#generate a dataframe, with columns: gene name, GEdivision, GEtile, qqActual, qqExpected
+geneNames <- vector()
+qqActual <- vector()
+qqExpected <- vector()
+trtCondition <- vector()
+
+
+#base
+fLPSbase
+emremlallbatchTrtSort <- fLPSbase[order(fLPSbase$pval_status.base),]
+geneNames <- c(geneNames,rownames(emremlallbatchTrtSort))
+qqActual <- c(qqActual,-log10(emremlallbatchTrtSort$pval_status.base))
+#qqExpected <- c(qqExpected,-log10(1:length(emremlallbatch$pval_status) / length(emremlallbatch$pval_status)))
+qqExpected <- c(qqExpected,-log10(sort(runif(length(rownames(emremlallbatchTrtSort)), min = 0, max = 1))))
+trtCondition <- c(trtCondition,rep("Base",length(rownames(emremlallbatchTrtSort))))
+
+#cell ctrl
+fLPSctrlCells
+emremlallbatchTrtSort <- fLPSctrlCells[order(fLPSctrlCells$pval_status.cCell),]
+geneNames <- c(geneNames,rownames(emremlallbatchTrtSort))
+qqActual <- c(qqActual,-log10(emremlallbatchTrtSort$pval_status.cCell))
+#qqExpected <- c(qqExpected,-log10(1:length(emremlallbatch$pval_status) / length(emremlallbatch$pval_status)))
+qqExpected <- c(qqExpected,-log10(sort(runif(length(rownames(emremlallbatchTrtSort)), min = 0, max = 1))))
+trtCondition <- c(trtCondition,rep("Ctrl B & T Cell",length(rownames(emremlallbatchTrtSort))))
+
+
+qqTreatment <- cbind.data.frame(geneNames,qqActual,qqExpected,trtCondition)
+
+qqPlot <- ggplot(data = qqTreatment, aes(x = qqExpected,
+                               y = qqActual,
+                               col = trtCondition)) +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point() +
+  scale_color_manual(values = c(ctrlF,dexF,gardF,lpsF)) +
+  theme_minimal() + theme_bw() +
+  labs(col = "Model") +
+  ggtitle("") +
+  ylab("-log<sub>10</sub>(pval) Observed") + xlab("-log<sub>10</sub>(pval) Expected (from uniform distribution)") +
+  theme(axis.title.x = element_markdown(),
+        axis.title.y = element_markdown())
+
+
+
+plot_grid(cellPlot, qqPlot, labels = c("A","B"), label_size = 12, nrow = 2, ncol = 1)
+ggsave(filename = paste0(suppFigDir,"FigS8_ctrl_for_cells.png"), width = 6, height = 8)
+
+
+```
+

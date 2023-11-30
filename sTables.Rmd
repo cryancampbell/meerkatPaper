@@ -8,6 +8,7 @@ date: "2023-08-15"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
 ```{r scripts and dirs}
 
 workDir <- gitDir <- "~/Documents/giterdone/"
@@ -20,4 +21,286 @@ dir.create(dataDir)
 dir.create(figDir)
 dir.create(outDir)
 
+```
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(ggpubr)
+library(cowplot)
+library(ggtext)
+
+suppFigDir <- "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/figures/paper/supp/"
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+# COLORS #
+
+#dark=m, light=f
+#Ctrl
+ctrlM <- "grey40"
+ctrlF <- "grey70"
+ctrlF <- "grey20"
+ctrlF <- ""
+ctrlM <- "darkorchid4"
+ctrlM <- "#B5A9F4"
+ctrlF <- "#154376"
+ctrlM <- "#4B9CD3"
+
+#Gard
+gardF <- "#947322"
+gardM <- "#E0B13F"
+
+#LPS
+lpsF <- "#944F40"
+lpsM <- "#E06E55"
+
+#Dex
+dexM <- "#4BC4E0"
+dexF <- "#358394"
+
+
+highES <- "forestgreen"
+lowES <- "orange"
+
+
+#LRS
+lowLRS <- "deeppink"
+highLRS <- "darkorchid"
+highLRS <- "#779CD7"
+lowLRS <- "#E08FC6"
+
+
+```
+
+### Tables
+
+```{r Table S1 Blood Draw-Capture Data}
+#one line per meerkat capture
+allMetaF <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_metadata.RDS")
+allMetaM <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_allTrt_10000genes_5lCPM_metadata.RDS")
+
+allMeta <- rbind.data.frame(allMetaF,allMetaM)
+
+keepCols <- c("group","captureref","sex","status_dom_sub","ageAtSample","sampleDate","rationale","kmpID","correctsampleID","pregStatusBackDate35","daysPrePreg","weight")
+
+allCaptures <- allMeta[,colnames(allMeta) %in% keepCols]
+allCaptures <- unique(allCaptures)
+
+## clear up column names
+colnames(allCaptures)[which(colnames(allCaptures) == "correctsampleID")] <- "animalIDfield"
+colnames(allCaptures)[which(colnames(allCaptures) == "kmpID")] <- "animalIDdatabase"
+colnames(allCaptures)[which(colnames(allCaptures) == "rationale")] <- "collectionRationale"
+colnames(allCaptures)[which(colnames(allCaptures) == "pregStatusBackDate35")] <- "pregnant"
+
+write.csv(x = allCaptures, file = "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/suppFiles/TableS1.csv")
+```
+
+```{r Table S2 Sample Data}
+#one per challenge, sequencing reads, etc
+allMetaF <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_metadata.RDS")
+allMetaM <- readRDS("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_allTrt_10000genes_5lCPM_metadata.RDS")
+
+allMeta <- rbind.data.frame(allMetaF,allMetaM)
+
+keepCols <- c("sampleID","group","captureref","sex","status_dom_sub","Reads","MappedReads","percentMapped",
+              "sampleDate","PercentInFeat","ReadsInFeat","UniqueGenes","kmpID","correctsampleID","Trt")
+
+
+allSamples <- allMeta[,colnames(allMeta) %in% keepCols]
+allSamples <- unique(allSamples)
+
+## clear up column names
+colnames(allSamples)[which(colnames(allSamples) == "correctsampleID")] <- "animalIDfield"
+colnames(allSamples)[which(colnames(allSamples) == "kmpID")] <- "animalIDdatabase"
+
+
+write.csv(x = allSamples, file = "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/suppFiles/TableS2.csv")
+```
+
+
+```{r Table S3 Model Results - Effect of Treatment}
+#All Treatment effects, Fonly, Monly, F+M
+maleLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_LPS_10000genes_5lCPM_modelF_basic+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+colnames(maleLPS) <- paste0(colnames(maleLPS),".LPS.M")
+maleLPS$gene <- rownames(maleLPS)
+femaleLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+colnames(femaleLPS) <- paste0(colnames(femaleLPS),".LPS.F")
+femaleLPS$gene <- rownames(femaleLPS)
+mfLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_MF_LPS_10000genes_5lCPM_modelF_basicMF+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+colnames(mfLPS) <- paste0(colnames(mfLPS),".LPS.MF")
+mfLPS$gene <- rownames(mfLPS)
+
+maleGard <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_Gard_10000genes_5lCPM_modelG_basic+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+colnames(maleGard) <- paste0(colnames(maleGard),".Gard.M")
+maleGard$gene <- rownames(maleGard)
+femaleGard <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gard_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+colnames(femaleGard) <- paste0(colnames(femaleGard),".Gard.F")
+femaleGard$gene <- rownames(femaleGard)
+mfGard <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_MF_Gard_10000genes_5lCPM_modelG_basicMF+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+colnames(mfGard) <- paste0(colnames(mfGard),".Gard.MF")
+mfGard$gene <- rownames(mfGard)
+
+maleDex <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_Dex_10000genes_5lCPM_modelG_basic+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+colnames(maleDex) <- paste0(colnames(maleDex),".Dex.M")
+maleDex$gene <- rownames(maleDex)
+femaleDex <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Dex_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+colnames(femaleDex) <- paste0(colnames(femaleDex),".Dex.F")
+femaleDex$gene <- rownames(femaleDex)
+mfDex <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_MF_Dex_10000genes_5lCPM_modelG_basicMF+WeightwKmatrix_emmreml_wPermFDR_v1_treatment")
+colnames(mfDex) <- paste0(colnames(mfDex),".Dex.MF")
+mfDex$gene <- rownames(mfDex)
+
+trtResults <- merge(maleLPS,femaleLPS, by = "gene", all = TRUE)
+
+#for each of the remaining 7 models, merge them in with the cumulative trtResults object
+for (result in c("mfLPS","maleGard","femaleGard","mfGard","maleDex","femaleDex","mfDex")) {
+  nextResult <- get(result)
+  newMergeResult <- merge(trtResults,nextResult, by = "gene", all = TRUE)
+  trtResults <- newMergeResult
+}
+
+write.csv(x = trtResults, file = "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/suppFiles/TableS3.csv")
+```
+
+```{r Table S4 Model Results - All-Treatment Combined Model}
+#comb
+
+#All Treatment effects, Fonly, Monly, F+M
+maleAll <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_M_allTrt_10000genes_5lCPM_modelG_allTrtM+WeightwKmatrix_emmreml")
+colnames(maleAll) <- paste0(colnames(maleAll),".M")
+maleAll$gene <- rownames(maleAll)
+
+femaleAll <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_modelG_allTrtF+Preg+WeightwKmatrix_emmreml")
+colnames(femaleAll) <- paste0(colnames(femaleAll),".F")
+femaleAll$gene <- rownames(femaleAll)
+
+allTrtResults <- merge(femaleAll,maleAll, by = "gene", all = TRUE)
+
+write.csv(x = allTrtResults, file = "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/suppFiles/TableS4.csv")
+```
+
+
+```{r Table S5 Model Results - Female - Condition-specific}
+#Status effects, Fonly
+fLPSonly <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+colnames(fLPSonly) <- paste0(colnames(fLPSonly),".LPS")
+fLPSonly$gene <- rownames(fLPSonly)
+
+fDexonly <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Dexonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+colnames(fDexonly) <- paste0(colnames(fDexonly),".Dex")
+fDexonly$gene <- rownames(fDexonly)
+
+fGardonly <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gardonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+colnames(fGardonly) <- paste0(colnames(fGardonly),".Gard")
+fGardonly$gene <- rownames(fGardonly)
+
+fCtrlonly <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+colnames(fCtrlonly) <- paste0(colnames(fCtrlonly),".Ctrl")
+fCtrlonly$gene <- rownames(fCtrlonly)
+
+fOnlyResultsLPSDex <- merge(fLPSonly,fDexonly, by = "gene", all = TRUE)
+fOnlyResultsGardCtrl <- merge(fGardonly,fCtrlonly, by = "gene", all = TRUE)
+fOnlyResults <- merge(fOnlyResultsLPSDex,fOnlyResultsGardCtrl, by = "gene", all = TRUE)
+
+write.csv(x = fOnlyResults, file = "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/suppFiles/TableS5.csv")
+```
+
+
+```{r Table S6 Model Results - Female - nested}
+#LPS
+fLPSnested <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPS_10000genes_5lCPM_modelF_nested+Preg+WeightwKmatrix_emmreml")
+
+fLPSnested$beta_interaction <- fLPSnested$beta_Trt.Status - fLPSnested$beta_Ctrl.Status
+fLPSnested$var_beta_interaction <- sqrt(fLPSnested$var_beta_Trt.Status^2 + fLPSnested$var_beta_Ctrl.Status^2)
+fLPSnested$t_interaction <- fLPSnested$beta_interaction / sqrt(fLPSnested$var_beta_interaction)
+fLPSnested$pval_interaction <- 2*pt(q=abs(fLPSnested$t_interaction), df=10000, lower.tail=FALSE)
+colnames(fLPSnested) <- paste0(colnames(fLPSnested),".LPS")
+fLPSnested$gene <- rownames(fLPSnested)
+
+#Gard
+fGardnested <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gard_10000genes_5lCPM_modelG_nested+Preg+WeightwKmatrix_emmreml")
+
+fGardnested$beta_interaction <- fGardnested$beta_Trt.Status - fGardnested$beta_Ctrl.Status
+fGardnested$var_beta_interaction <- sqrt(fGardnested$var_beta_Trt.Status^2 + fGardnested$var_beta_Ctrl.Status^2)
+fGardnested$t_interaction <- fGardnested$beta_interaction / sqrt(fGardnested$var_beta_interaction)
+fGardnested$pval_interaction <- 2*pt(q=abs(fGardnested$t_interaction), df=10000, lower.tail=FALSE)
+colnames(fGardnested) <- paste0(colnames(fGardnested),".Gard")
+fGardnested$gene <- rownames(fGardnested)
+
+#Dex
+fDexnested <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Dex_10000genes_5lCPM_modelG_nested+Preg+WeightwKmatrix_emmreml")
+
+fDexnested$beta_interaction <- fDexnested$beta_Trt.Status - fDexnested$beta_Ctrl.Status
+fDexnested$var_beta_interaction <- sqrt(fDexnested$var_beta_Trt.Status^2 + fDexnested$var_beta_Ctrl.Status^2)
+fDexnested$t_interaction <- fDexnested$beta_interaction / sqrt(fDexnested$var_beta_interaction)
+fDexnested$pval_interaction <- 2*pt(q=abs(fDexnested$t_interaction), df=10000, lower.tail=FALSE)
+colnames(fDexnested) <- paste0(colnames(fDexnested),".Dex")
+fDexnested$gene <- rownames(fDexnested)
+
+resultsLPSGard <- merge(fLPSnested, fGardnested, by = "gene", all = TRUE)
+nestedResults <- merge(resultsLPSGard, fDexnested, by = "gene", all = TRUE)
+
+write.csv(x = nestedResults, file = "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/suppFiles/TableS6.csv")
+```
+
+
+```{r Table S7 Longitudunal Analysis Results}
+longSampleResults <- readRDS(file = paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/","longitudinalSampleResults.RDS"))
+longSampleResultsCtrl <- readRDS(file = paste0("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/","longitudinalSampleResultsCtrl.RDS"))
+
+#lps, significant genes only
+longSampleResultsCtrl <- longSampleResultsCtrl[longSampleResultsCtrl$geneNamePlot %in% longSampleResults$geneNamePlot & longSampleResultsCtrl$treatment == "LPS",]
+
+longSampleResults <- longSampleResults[,colnames(longSampleResults) %in% c("geneNamePlot","statPval","meanGEdom","meanGEsub","wTestPValStatus","tTestStatStatus",
+                                                                           "emmremlStdBetaStatus","emmremlPValStatus","emmremlQValStatus","treatment","statusGEdiff",
+                                                                           "statusDirConsistent","statusSigConsistent","keyPathway")]
+
+longSampleResultsCtrl <- longSampleResultsCtrl[,colnames(longSampleResultsCtrl) %in% c("geneNamePlot","statPval","meanGE1st","meanGE2nd","wTestPValStatus","tTestStatStatus",
+                                                                                       "emmremlStdBetaStatus","emmremlPValStatus","emmremlQValStatus","treatment","statusGEdiff",
+                                                                                       "statusDirConsistent","statusSigConsistent")]
+
+#add key pathway info to control set
+keyGenes <- subset(longSampleResults, keyPathway)$geneNamePlot
+longSampleResultsCtrl$keyPathway <- ifelse(longSampleResultsCtrl$geneNamePlot %in% keyGenes, TRUE, FALSE)
+
+#flip 2nd and 1st measure in control set
+longSampleResultsCtrl <- longSampleResultsCtrl[,c(1,2,4,3,5:14)]
+
+longSampleResults$statusChange <- "S->D"
+longSampleResultsCtrl$statusChange <- "S->S"
+
+colnames(longSampleResults)[which(colnames(longSampleResults) == "meanGEsub")] <- "meanGE1st"
+colnames(longSampleResults)[which(colnames(longSampleResults) == "meanGEdom")] <- "meanGE2nd"
+
+allLongitudinalResults <- rbind.data.frame(longSampleResults,longSampleResultsCtrl)
+
+write.csv(x = allLongitudinalResults, file = "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/suppFiles/TableS7.csv")
+```
+
+
+```{r Table S8 Multispecies GSEA results}
+allMultiSppGSEA <- read.table("~/Dropbox (Personal)/socialSignal/output/gsea_multiSPP_GSEA_allResults.txt", sep = ",", header = T)
+
+allMultiSppGSEA <- allMultiSppGSEA[,-which(colnames(allMultiSppGSEA) == "m")]
+
+colnames(allMultiSppGSEA) <- c("Pathway","Pval_UpReg","Pval_DownReg","ESupReg","ESdownReg","speciesSexTrt","lpsTrt")
+
+plotSpecies <- c("BaboonMale_plusTrt","BaboonMale_minusTrt","BaboonFemale_plusTrt","BaboonFemale_minusTrt","SGE1_plusTrt","SGE1_minusTrt","meerkatBetasFLPS_plusTrt" ,"meerkatBetasFLPS_minusTrt")
+
+allMultiSppGSEA <- subset(allMultiSppGSEA, speciesSexTrt %in% plotSpecies)
+
+allMultiSppGSEA$speciesSex <- ifelse(allMultiSppGSEA$speciesSexTrt == "BaboonMale_plusTrt","maleBaboon",
+                                 ifelse(allMultiSppGSEA$speciesSexTrt == "BaboonMale_minusTrt","maleBaboon",
+                                        ifelse(allMultiSppGSEA$speciesSexTrt == "BaboonFemale_plusTrt","femaleBaboon",
+                                               ifelse(allMultiSppGSEA$speciesSexTrt == "BaboonFemale_minusTrt","femaleBaboon",
+                                                      ifelse(allMultiSppGSEA$speciesSexTrt == "SGE1_plusTrt","femaleMacaque",
+                                                             ifelse(allMultiSppGSEA$speciesSexTrt == "SGE1_minusTrt","femaleMacaque","femaleMeerkat"))))))
+
+allMultiSppGSEA$Trt <- ifelse(allMultiSppGSEA$lpsTrt == "plus", "LPS", "Ctrl")
+
+
+write.csv(x = allMultiSppGSEA, file = "~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/suppFiles/TableS8.csv")
 ```

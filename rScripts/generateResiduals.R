@@ -68,6 +68,13 @@
 #V: F + Status Centered Weight
 #W: G + Status Centered Weight
 
+#H: F + Age
+#I: G + Age
+
+#X: F + Status-Centered Age
+#Y: G + Status-Centered Age
+
+
 workDir <- workDir
 batchList <- c("allBatches")
 focalSex <- "F"
@@ -228,7 +235,7 @@ genResids <- function(workDir, gatherSubset, model){
       
   
   ## if the model does NOT include combat, start here with a typical PCA with / without LM
-      if ( model %in% c("A","B","C","D","E","F","G","P","Q","R","S","T","U","V","W") ) {
+      if ( model %in% c("A","B","C","D","E","F","G","P","Q","R","S","T","U","V","W","H","I","X","Y") ) {
         #control for tech variables
         # find it by model
         if (model == "A") {
@@ -538,6 +545,90 @@ genResids <- function(workDir, gatherSubset, model){
                                      subsetMeta$seqLibBatch + subsetMeta$qubitConc + subsetMeta$statCentWeight)
             
             lmUsed <- "Genes_PercentInFeat_PercentMapped_libBatch_qubit_centWeight"
+            
+            titleText <- " (lm Used)"
+            
+            vNormLM <- voom(filterCountsDF,design,plot=FALSE)
+            #vNormLM <- voomWithQualityWeights(modelCountsLCPMfilt,design,plot=FALSE)
+            
+            fit <- lmFit(vNormLM,design)
+            residuals <- residuals.MArrayLM(object=fit, vNormLM)
+            
+            pca <- prcomp(cor(residuals, method = "spearman"))
+            
+            df_out <- as.data.frame(pca$x)
+            dfMeta <- cbind(df_out,subsetMeta)
+            
+            pcaWithLM <- pca
+            summary(pca)
+          } else if (model == "H") {
+            design <- model.matrix(~ subsetMeta$UniqueGenes + subsetMeta$PercentInFeat + subsetMeta$percentMapped + 
+                                     subsetMeta$seqLibBatch + subsetMeta$centAge)
+            
+            lmUsed <- "Genes_PercentInFeat_PercentMapped_libBatch_age"
+            
+            titleText <- " (lm Used)"
+            
+            vNormLM <- voom(filterCountsDF,design,plot=FALSE)
+            #vNormLM <- voomWithQualityWeights(modelCountsLCPMfilt,design,plot=FALSE)
+            
+            fit <- lmFit(vNormLM,design)
+            residuals <- residuals.MArrayLM(object=fit, vNormLM)
+            
+            pca <- prcomp(cor(residuals, method = "spearman"))
+            
+            df_out <- as.data.frame(pca$x)
+            dfMeta <- cbind(df_out,subsetMeta)
+            
+            pcaWithLM <- pca
+            summary(pca)
+          } else if (model == "I") {
+            design <- model.matrix(~ subsetMeta$UniqueGenes + subsetMeta$PercentInFeat + subsetMeta$percentMapped + 
+                                     subsetMeta$seqLibBatch + subsetMeta$qubitConc + subsetMeta$centAge)
+            
+            lmUsed <- "Genes_PercentInFeat_PercentMapped_libBatch_qubit_age"
+            
+            titleText <- " (lm Used)"
+            
+            vNormLM <- voom(filterCountsDF,design,plot=FALSE)
+            #vNormLM <- voomWithQualityWeights(modelCountsLCPMfilt,design,plot=FALSE)
+            
+            fit <- lmFit(vNormLM,design)
+            residuals <- residuals.MArrayLM(object=fit, vNormLM)
+            
+            pca <- prcomp(cor(residuals, method = "spearman"))
+            
+            df_out <- as.data.frame(pca$x)
+            dfMeta <- cbind(df_out,subsetMeta)
+            
+            pcaWithLM <- pca
+            summary(pca)
+          } else if (model == "X") {
+            design <- model.matrix(~ subsetMeta$UniqueGenes + subsetMeta$PercentInFeat + subsetMeta$percentMapped + 
+                                     subsetMeta$seqLibBatch + subsetMeta$statCentAge)
+            
+            lmUsed <- "Genes_PercentInFeat_PercentMapped_libBatch_centAge"
+            
+            titleText <- " (lm Used)"
+            
+            vNormLM <- voom(filterCountsDF,design,plot=FALSE)
+            #vNormLM <- voomWithQualityWeights(modelCountsLCPMfilt,design,plot=FALSE)
+            
+            fit <- lmFit(vNormLM,design)
+            residuals <- residuals.MArrayLM(object=fit, vNormLM)
+            
+            pca <- prcomp(cor(residuals, method = "spearman"))
+            
+            df_out <- as.data.frame(pca$x)
+            dfMeta <- cbind(df_out,subsetMeta)
+            
+            pcaWithLM <- pca
+            summary(pca)
+          } else if (model == "Y") {
+            design <- model.matrix(~ subsetMeta$UniqueGenes + subsetMeta$PercentInFeat + subsetMeta$percentMapped + 
+                                     subsetMeta$seqLibBatch + subsetMeta$qubitConc + subsetMeta$statCentAge)
+            
+            lmUsed <- "Genes_PercentInFeat_PercentMapped_libBatch_qubit_centAge"
             
             titleText <- " (lm Used)"
             
