@@ -558,22 +558,30 @@ Figure 2
 ```{r}
 #2.A
 # plot of significant genes in M and F
+femaleAll <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_modelG_allTrtF+Preg+WeightwKmatrix_emmreml")
+femaleAll$qval_status <- qvalue(femaleAll$pval_status)$qvalue
+
+sigInAllGeneList <- rownames(femaleAll)[femaleAll$qval_status < .0736]
 
 #count of significant genes, male and female by treatment | using qvalue as a dummy
 femaleLPS <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_LPSonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
+femaleLPS$sigInAll <- rownames(femaleLPS) %in% sigInAllGeneList
 #femaleLPS$qval_treatment <- qvalue(femaleLPS$pval_treatment)$qvalue
 
 femaleGard <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Gardonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
 #femaleGard$qval_treatment <- qvalue(femaleGard$pval_treatment)$qvalue
+femaleGard$sigInAll <- rownames(femaleGard) %in% sigInAllGeneList
 
 femaleDex <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Dexonly_10000genes_5lCPM_modelG_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
 #femaleDex$qval_treatment <- qvalue(femaleDex$pval_treatment)$qvalue
+femaleDex$sigInAll <- rownames(femaleDex) %in% sigInAllGeneList
 
 femaleCtrl <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_Ctrlonly_10000genes_5lCPM_modelF_basic+Preg+WeightwKmatrix_emmreml_wPermFDR_v1_status")
 #femaleDex$qval_treatment <- qvalue(femaleDex$pval_treatment)$qvalue
+femaleCtrl$sigInAll <- rownames(femaleCtrl) %in% sigInAllGeneList
 
-femaleAll <- read.table("~/Dropbox (Personal)/meerkats/RNA/meerkatGE/output/allBatches_F_allTrt_10000genes_5lCPM_modelG_allTrtF+Preg+WeightwKmatrix_emmreml")
-#femaleDex$qval_treatment <- qvalue(femaleDex$pval_treatment)$qvalue
+
+
 
 
 fdrThresh <- 0.10
@@ -707,6 +715,44 @@ ggplot(data = fAllCtrlPlot,
   geom_point(size = pointSize, col = "gray15")
 ggsave(paste0(figPaperDir,"3a_CtrlVallTrt_sigBetaPlot.png"), width = 4, height = 4)
 
+ggplot(data = fAllCtrlPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.ctrl)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="Ctrl Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  geom_point(size = pointSize, col = "gray15", 
+             aes(shape = fdr_status < .1)) +
+  scale_shape_manual(values = c(1,4)) +
+  theme(legend.position = "none")
+ggsave(paste0(figPaperDir,"3a_CtrlVallTrt_sigBetaPlot_xShapeAllSig.png"), width = 4, height = 4)
+
+ggplot(data = fAllCtrlPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.ctrl)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="Ctrl Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  geom_point(size = pointSize, col = "gray15", 
+             aes(shape = fdr_status < .001)) +
+  scale_shape_manual(values = c(1,4)) +
+  theme(legend.position = "none")
+ggsave(paste0(figPaperDir,"3a_CtrlVallTrt_sigBetaPlot_xShapeUniqueSig.png"), width = 4, height = 4)
+
 
 #gard - all
 femaleGard$gene <- rownames(femaleGard)
@@ -715,6 +761,8 @@ fAllGard <- merge(femaleAll,femaleGard, by = "gene", suffixes = c(".all",".gard"
 
 #fAllGardPlot <- fAllGard[fAllGard$fdr_status < fdrThresh | qvalue(fAllGard$pval_status.all)$qvalue < fdrThresh,]
 fAllGardPlot <- fAllGard[fAllGard$gene %in% allSigGenes,]
+
+fAllGardPlot$pointShape <- ifelse(fAllGardPlot$fdr_status < .1 & !fAllGardPlot$sigInAll, TRUE, FALSE)
 
 ggplot(data = fAllGardPlot,
        aes(x = stdBeta_status.all,
@@ -748,6 +796,42 @@ ggplot(data = fAllGardPlot,
   geom_point(size = pointSize, col = gardF)
 ggsave(paste0(figPaperDir,"3a_GardVallTrt_sigBetaPlot__RIGHT.png"), width = 4, height = 4)
 
+ggplot(data = fAllGardPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.gard)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="Gard Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5), position = "right") +
+  geom_point(size = pointSize, col = gardF, aes(shape = fdr_status < .1)) +
+   scale_shape_manual(values = c(1,4)) +
+  theme(legend.position = "none")
+ggsave(paste0(figPaperDir,"3a_GardVallTrt_sigBetaPlot_xShapeAll__RIGHT.png"), width = 4, height = 4)
+
+ggplot(data = fAllGardPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.gard)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="Gard Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5), position = "right") +
+  geom_point(size = pointSize, col = gardF, aes(shape = pointShape)) +
+  scale_shape_manual(values = c(1,4)) +
+  theme(legend.position = "none")
+ggsave(paste0(figPaperDir,"3a_GardVallTrt_sigBetaPlot_xShapeUnique__RIGHT.png"), width = 4, height = 4)
+
 
 #lps - all
 #geneHighlight <- c("EDN1","SEMA4D","CD74","COMMD1","COMMD5","AKT1")
@@ -763,6 +847,8 @@ fAllLPSPlot <- fAllLPS[fAllLPS$gene %in% allSigGenes,]
 fAllLPSPlot$geneHighlight <- fAllLPSPlot$gene %in% geneHighlight
 
 fAllLPSPlot <- fAllLPSPlot[order(fAllLPSPlot$geneHighlight),]
+
+fAllLPSPlot$pointShape <- ifelse(fAllLPSPlot$fdr_status < .1 & !fAllLPSPlot$sigInAll, TRUE, FALSE)
 
 ggplot(data = fAllLPSPlot,
        aes(x = stdBeta_status.all,
@@ -782,6 +868,48 @@ ggplot(data = fAllLPSPlot,
   theme(legend.position = "none") +
   scale_color_manual(values = c(lpsF,"gray15"))
 ggsave(paste0(figPaperDir,"3a_lpsVallTrt_sigBetaPlot.png"), width = 4, height = 4)
+
+ggplot(data = fAllLPSPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.lps,
+           col = geneHighlight)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="LPS Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  geom_point(size = pointSize, 
+             aes(shape = fdr_status < .1)) +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c(lpsF,"gray15")) +
+  scale_shape_manual(values = c(1,4))
+ggsave(paste0(figPaperDir,"3a_lpsVallTrt_sigBetaPlot_xShapeAllSig.png"), width = 4, height = 4)
+
+ggplot(data = fAllLPSPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.lps,
+           col = geneHighlight)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="LPS Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  geom_point(size = pointSize, 
+             aes(shape = pointShape)) +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c(lpsF,"gray15")) +
+  scale_shape_manual(values = c(1,4))
+ggsave(paste0(figPaperDir,"3a_lpsVallTrt_sigBetaPlot_xShapeUniqueSig.png"), width = 4, height = 4)
 
 
 #dex - all
@@ -825,6 +953,26 @@ ggplot(data = fAllDexPlot,
 ggsave(paste0(figPaperDir,"3a_DexVallTrt_sigBetaPlot__RIGHT.png"), width = 4, height = 4)
 
 
+### ONLY identified in the given condition -- X
+### identified in either all treatments only, or all treatments and the given condition -- O
+
+ggplot(data = fAllDexPlot,
+       aes(x = stdBeta_status.all,
+           y = stdBeta_status.dex)) +
+  geom_hline(yintercept = 0, lwd = axisSize) + geom_vline(xintercept = 0, lwd = axisSize) +
+  geom_abline(slope = 1, intercept = 0, lwd = .5, linetype = "dashed") +
+  theme_minimal() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        panel.border = element_blank(),
+        axis.title = element_text(size = labelSize, color = "black"),
+        axis.text = element_text(size = numberSize, color = "black")) +
+  xlim(c(-8,8)) + ylim(c(-8,8)) +
+  scale_x_continuous(name="All Treatment", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5)) +
+  scale_y_continuous(name="Dex Condition", limits=c(-7.5, 7.5), breaks=c(-5,-2.5,0,2.5,5), position = "right") +
+  geom_point(size = pointSize, col = dexF, aes(shape = fdr_status < .1)) +
+  scale_shape_manual(values = c(1,4)) +
+  theme(legend.position = "none")
+ggsave(paste0(figPaperDir,"3a_DexVallTrt_sigBetaPlot_xShape__RIGHT.png"), width = 4, height = 4)
 ```
 
 ```{r 3b single gene broken down by status and treatment}
